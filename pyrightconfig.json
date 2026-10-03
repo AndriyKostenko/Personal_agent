@@ -1,0 +1,8 @@
+{
+  "include": ["backend"],
+  "exclude": ["**/.venv", "**/__pycache__", "backend/qdrant_db", "backend/utils/qdrant_db"],
+  "venvPath": "backend",
+  "venv": ".venv",
+  "extraPaths": ["backend"],
+  "pythonVersion": "3.14"
+}

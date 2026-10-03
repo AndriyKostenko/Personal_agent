@@ -1,0 +1,20 @@
+# secrets and local state must never end up in an image
+.env
+.env.*
+.venv
+.git
+.gitignore
+
+# python caches
+__pycache__/
+**/__pycache__/
+*.pyc
+.ruff_cache/
+
+# data lives in a volume (/data), not in the image
+qdrant_db/
+utils/qdrant_db/
+media/
+data/
+pipeline/sync_state.json
+pipeline/caption_cache.json

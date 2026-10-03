@@ -1,0 +1,1 @@
+1. running FastAPI - `uvicorn main:app --reload`
