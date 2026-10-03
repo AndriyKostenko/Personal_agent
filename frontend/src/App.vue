@@ -53,18 +53,28 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 const renderMarkdown = (md) =>
   DOMPurify.sanitize(marked.parse(md, { async: false }), { USE_PROFILES: { html: true } })
 
+// crypto.randomUUID exists only in secure contexts (https / localhost); getRandomValues works on plain http too
+const newId = () => {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+}
+
 // Anonymous visitor id. The server counts the limits per id (and, as a safety net, per IP).
 const CLIENT_KEY = 'about-andriy-client-id'
 const getClientId = () => {
   try {
     let id = localStorage.getItem(CLIENT_KEY)
     if (!id) {
-      id = crypto.randomUUID()
+      id = newId()
       localStorage.setItem(CLIENT_KEY, id)
     }
     return id
   } catch {
-    return crypto.randomUUID() // storage is blocked: the id lives until the page is closed
+    return newId() // storage is blocked: the id lives until the page is closed
   }
 }
 const clientId = getClientId()
@@ -166,7 +176,7 @@ const saveSession = () => {
 watch([chats, activeId], () => { if (!saveTimer) saveTimer = setTimeout(saveSession, 300) }, { deep: true })
 
 const createChat = () => {
-  chats.value.unshift({ id: crypto.randomUUID(), title: DEFAULT_TITLE, messages: [] })
+  chats.value.unshift({ id: newId(), title: DEFAULT_TITLE, messages: [] })
   return chats.value[0] // the reactive proxy
 }
 
