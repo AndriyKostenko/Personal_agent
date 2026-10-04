@@ -1,7 +1,7 @@
-# AI Mentor: the site (nginx) and the API (FastAPI) behind one public port.
+# AI Mentor: caddy (HTTPS) -> nginx (the site) -> FastAPI (the API). Public ports: 80 and 443.
 #
-#   cp .env.example .env            # fill in OPEN_ROUTER_API_KEY and ADMIN_API_KEY
-#   docker compose up -d --build    # http://localhost:8080
+#   cp .env.example .env            # fill in OPEN_ROUTER_API_KEY, ADMIN_API_KEY and DOMAIN
+#   docker compose up -d --build    # https://$DOMAIN
 #
 # Fill the knowledge base (first time and after every change of the notes). The job reads the
 # Obsidian vault read-only, captions the photos, copies them to /data/media and indexes the
@@ -34,21 +34,17 @@ services:
     environment:
       OPEN_ROUTER_API_KEY: ${OPEN_ROUTER_API_KEY:?Set OPEN_ROUTER_API_KEY in .env}
       OPENROUTER_API_URL: ${OPENROUTER_API_URL:-https://openrouter.ai/api/v1}
-      # protects /index and /search; the sync job below sends it
       ADMIN_API_KEY: ${ADMIN_API_KEY:?Set ADMIN_API_KEY in .env}
-      # usage limits per visitor
       MAX_QUESTIONS_PER_USER: ${MAX_QUESTIONS_PER_USER:-5}
       MAX_CHATS_PER_USER: ${MAX_CHATS_PER_USER:-2}
       MAX_QUESTIONS_PER_IP: ${MAX_QUESTIONS_PER_IP:-15}
-      # nginx is one proxy in front of the backend. Add one more for every proxy / load
-      # balancer in front of nginx (see .env.example).
+      # Single reverse proxy in front (host Nginx)
       TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-1}
-      # not needed while the site and the API share one origin (the default setup)
       CORS_ORIGINS: ${CORS_ORIGINS:-[]}
     volumes:
       - appdata:/data
     expose:
-      - "8000" # reachable only from the other containers; the healthcheck is in the image
+      - "8000"
     logging: *default-logging
     <<: *hardening
 
@@ -65,18 +61,19 @@ services:
     environment:
       BACKEND_UPSTREAM: http://backend:8000
     ports:
-      - "${HTTP_PORT:-8080}:8080"
+      # Bind to localhost only so traffic must pass through the host Nginx SSL layer
+      - "127.0.0.1:8080:8080"
     logging: *default-logging
     <<: *hardening
 
-  # One-off job: docker compose --profile sync run --rm sync
+  # One-off sync job: docker compose --profile sync run --rm sync
   sync:
     image: ai-mentor-backend:local
     profiles: ["sync"]
     depends_on:
       backend:
         condition: service_healthy
-    working_dir: /data/sync # sync_state.json and caption_cache.json are written to the cwd
+    working_dir: /data/sync
     command: ["python", "/app/pipeline/sync_notes.py"]
     environment:
       OPEN_ROUTER_API_KEY: ${OPEN_ROUTER_API_KEY:?Set OPEN_ROUTER_API_KEY in .env}
@@ -84,8 +81,6 @@ services:
       ADMIN_API_KEY: ${ADMIN_API_KEY:?Set ADMIN_API_KEY in .env}
       OBSIDIAN_KNOWLEDGE_BASE_PATH: /vault
       INDEX_API_URL: http://backend:8000/api/v1/index
-      # The photo URLs are stored inside the vector database. A relative address keeps them
-      # valid whatever domain the site is served from.
       MEDIA_BASE_URL: ${MEDIA_BASE_URL:-/media}
       MEDIA_DIR: /data/media
       VISION_MODEL: ${VISION_MODEL:-openai/gpt-4o-mini}
@@ -96,3 +91,4 @@ services:
 
 volumes:
   appdata:
+
