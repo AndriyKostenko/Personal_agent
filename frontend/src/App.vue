@@ -150,7 +150,7 @@ const blockMessage = computed(() => {
   return serverNotice.value
 })
 const placeholder = computed(() =>
-  blockReason.value === 'questions' ? 'No questions left' : 'Ask about Andriy, or say: show me his photos',
+  blockReason.value === 'questions' ? 'No questions left' : "Ask me about Andriy or use the commands '/'...",
 )
 
 // saving is throttled: while an answer streams the messages change on every token
@@ -252,10 +252,48 @@ const sideQuestions = [
   'What is Andriy learning right now?',
 ]
 
-const askMentor = () => sendQuestion(question.value)
+// slash commands typed in the prompt field: a command is a shortcut for a ready prompt, the agent
+// (and its find_photos tool) answers it like any other question
+const commands = [
+  {
+    name: '/about',
+    hint: 'Who Andriy is',
+    prompt: 'Tell me about Andriy: who he is, where he is from and what he is like.',
+  },
+  {
+    name: '/career',
+    hint: 'His professional career',
+    prompt:
+      "Describe Andriy's professional career: his background, his current work as a software engineer and the technical skills his notes show.",
+  },
+  {
+    name: '/skills',
+    hint: 'What he knows',
+    prompt:
+      "Summarize Andriy's technical skills based on his notes: languages, backend topics, databases and anything else he has studied. Group them by area and include short code examples from the notes where they exist.",
+  },
+]
+
+// the menu while the visitor is typing the command name ("/" or "/sho")
+const suggestions = computed(() => {
+  const typed = question.value.trimStart().toLowerCase()
+  if (!typed.startsWith('/') || typed.includes(' ')) return []
+  return commands.filter((c) => c.name.startsWith(typed))
+})
+
+const runCommand = (cmd) => sendQuestion(cmd.prompt, cmd.name)
+
+const askMentor = () => {
+  const typed = question.value.trim()
+  if (!typed.startsWith('/')) return sendQuestion(typed)
+  const lower = typed.toLowerCase()
+  const cmd = commands.find((c) => c.name === lower) || (suggestions.value.length === 1 ? suggestions.value[0] : null)
+  if (cmd) return runCommand(cmd)
+  serverNotice.value = `UNKNOWN COMMAND. TRY ${commands.map((c) => c.name.toUpperCase()).join(', ')}`
+}
 const askQuickPrompt = (item) => sendQuestion(item.prompt)
 
-const sendQuestion = async (text) => {
+const sendQuestion = async (text, shown = text) => {
   const userQuery = text.trim()
   if (!userQuery || isLoading.value || blockReason.value) return
 
@@ -266,7 +304,7 @@ const sendQuestion = async (text) => {
   const msgs = messages.value // the reactive proxy
 
   // Add user's message to UI
-  msgs.push({ role: 'user', content: userQuery })
+  msgs.push({ role: 'user', content: shown.trim() })
   isLoading.value = true
   steps.value = []
   scrollToBottom()
@@ -402,10 +440,10 @@ const sendQuestion = async (text) => {
             <span class="cap cap-bl">BINARY // DECODE</span>
             <span class="cap cap-br">CLICK TO REPLAY</span>
           </div>
-          <h1>Andriy</h1>
+          <h1>Andriy <span class="ver">v2.0</span></h1>
           <p class="role">SOFTWARE ENGINEER</p>
           <p class="lead">
-            Ask the AI about Andriy. It answers from his own notes and can show his photos.
+            I'm the Personal Andriy's Agent. <br /> I answer from his own notes and can show his photos.
           </p>
           <div class="cards">
             <button
@@ -499,6 +537,19 @@ const sendQuestion = async (text) => {
         </button>
       </div>
 
+      <div class="composer-wrap">
+      <div v-if="suggestions.length && !isLoading && !blockReason" class="slash frame" role="listbox">
+        <button
+          v-for="c in suggestions"
+          :key="c.name"
+          type="button"
+          class="slash-item"
+          role="option"
+          @click="runCommand(c)"
+        >
+          <b>{{ c.name }}</b><span>{{ c.hint }}</span>
+        </button>
+      </div>
       <form class="composer frame" @submit.prevent="askMentor">
         <input
           v-model="question"
@@ -517,6 +568,7 @@ const sendQuestion = async (text) => {
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
         </button>
       </form>
+      </div>
       <p class="fineprint">ANSWERS ARE GENERATED FROM ANDRIY'S NOTES</p>
     </div>
       </section>
@@ -777,7 +829,16 @@ body {
   letter-spacing: 0.04em;
   line-height: 1.05;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--ink-strong);
+}
+
+.hero h1 .ver {
+  font-family: var(--mono);
+  font-size: 0.3em;
+  letter-spacing: 0.08em;
+  text-transform: none; /* "v2.0", not "V2.0" */
+  color: var(--orange);
 }
 
 .role {
@@ -1243,6 +1304,47 @@ body {
 }
 
 /* the question counter above the prompt field */
+.composer-wrap {
+  position: relative;
+}
+
+/* the command menu opens above the prompt field */
+.slash {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  z-index: 10;
+  margin-bottom: 8px;
+  background: rgba(13, 13, 13, 0.96);
+  border: 1px solid var(--line-strong);
+}
+
+.slash-item {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 14px;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.slash-item b {
+  color: var(--orange);
+  letter-spacing: 0.06em;
+}
+
+.slash-item:hover {
+  background: rgba(229, 87, 28, 0.1);
+  color: var(--ink-strong);
+}
+
 .usage {
   display: flex;
   align-items: center;
