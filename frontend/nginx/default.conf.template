@@ -36,6 +36,10 @@ server {
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 300s;
+        # nginx strips the X-Accel-Buffering header the backend sends, so a proxy in front of this
+        # one (the host nginx) would buffer the stream again. Setting it here tells that proxy
+        # not to buffer this response.
+        add_header X-Accel-Buffering "no" always;
 
         client_max_body_size 64k;
         include /etc/nginx/snippets/security-headers.conf;
