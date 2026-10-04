@@ -133,8 +133,8 @@ class UsageService:
                     if usage["chats_used"] >= s.MAX_CHATS_PER_USER:
                         raise LimitExceeded(
                             "chat_limit",
-                            f"You can have at most {s.MAX_CHATS_PER_USER} chats. "
-                            "Continue in one of your existing chats.",
+                            "Only one conversation is available per visitor. "
+                            "Continue in your existing conversation.",
                             usage,
                         )
                     conn.execute(
