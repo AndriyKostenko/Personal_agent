@@ -5,6 +5,7 @@ import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js/lib/common'
 import DOMPurify from 'dompurify'
 import BinaryPortrait from './components/BinaryPortrait.vue'
+import FallingQuestions from './components/FallingQuestions.vue'
 
 // в marked 18 highlight подключается через расширение, а не через setOptions
 marked.use(markedHighlight({
@@ -86,12 +87,10 @@ const isLoading = ref(false)
 const chatContainer = ref(null)
 const steps = ref([]) // live steps of the agent for the current request
 const streaming = ref(false) // true while the answer text is being typed out
-const sidebarOpen = ref(false) // the chat list as a drawer on small screens
 
 // ───────────── usage limits (the server is the source of truth) ─────────────
-const usage = ref({ questions_used: 0, questions_limit: 5, chats_used: 0, chats_limit: 2 })
+const usage = ref({ questions_used: 0, questions_limit: 10 })
 const questionsLeft = computed(() => Math.max(0, usage.value.questions_limit - usage.value.questions_used))
-const chatsFull = computed(() => usage.value.chats_used >= usage.value.chats_limit)
 const serverNotice = ref('') // a limit message that came with a refusal of the server
 
 const loadUsage = async () => {
@@ -104,123 +103,81 @@ const loadUsage = async () => {
 }
 onMounted(loadUsage)
 
-// ───────────── chats ─────────────
-// Every chat is { id, title, messages }. The id is also the thread_id of the agent's memory.
-// The list lives in localStorage, next to the visitor id: the limits are per visitor, so the
-// chats have to be reachable again after the tab was closed.
-const STORE_KEY = 'about-andriy-chats'
-const DEFAULT_TITLE = 'New chat'
+// ───────────── the conversation ─────────────
+// There is one conversation per visitor. Its id is also the thread_id of the agent's memory.
+// It lives in localStorage, next to the visitor id: the limits are per visitor, so the
+// conversation has to be reachable again after the tab was closed.
+const STORE_KEY = 'about-andriy-chat'
+const OLD_STORE_KEY = 'about-andriy-chats' // the earlier version kept a list of chats
 
-const loadSession = () => {
+const loadConversation = () => {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null')
-    if (!saved || !Array.isArray(saved.chats)) return { chats: [], activeId: null }
-    for (const chat of saved.chats) {
-      for (const m of chat.messages) {
-        if (m.role === 'assistant') {
-          m.answer = renderMarkdown(m.raw || '') // HTML is never trusted from storage
-          m.streaming = false
-        }
+    let saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null')
+    if (!saved) {
+      // migrate: keep the active (or the longest) chat of the old list, so its thread stays known to the server
+      const old = JSON.parse(localStorage.getItem(OLD_STORE_KEY) || 'null')
+      const list = Array.isArray(old?.chats) ? old.chats : []
+      saved =
+        list.find((c) => c.id === old.activeId) ||
+        [...list].sort((x, y) => y.messages.length - x.messages.length)[0] ||
+        null
+    }
+    if (!saved || !Array.isArray(saved.messages)) return { id: newId(), messages: [] }
+    for (const m of saved.messages) {
+      if (m.role === 'assistant') {
+        m.answer = renderMarkdown(m.raw || '') // HTML is never trusted from storage
+        m.streaming = false
       }
     }
-    const known = saved.chats.some((c) => c.id === saved.activeId)
-    return { chats: saved.chats, activeId: known ? saved.activeId : null }
+    return { id: saved.id, messages: saved.messages }
   } catch {
-    return { chats: [], activeId: null }
+    return { id: newId(), messages: [] }
   }
 }
 
-const session = loadSession()
-const chats = ref(session.chats)
-const activeId = ref(session.activeId) // null = the main screen
+const conversation = loadConversation()
+const threadId = conversation.id
+const messages = ref(conversation.messages)
+const home = ref(!messages.value.length) // true = the main screen (the portrait) is shown
+const showHero = computed(() => home.value || !messages.value.length)
 
-const activeChat = computed(() => chats.value.find((c) => c.id === activeId.value) || null)
-const messages = computed(() => activeChat.value?.messages ?? [])
-
-// Why the visitor can not ask right now (null = can). A message in a chat that already
-// exists costs only a question; the first message of a new chat costs a question and a chat.
-const blockReason = computed(() => {
-  if (questionsLeft.value === 0) return 'questions'
-  const opensNewChat = !activeChat.value || !activeChat.value.messages.length
-  if (opensNewChat && chatsFull.value) return 'chats'
-  return null
-})
+// Why the visitor can not ask right now (null = can)
+const blockReason = computed(() => (questionsLeft.value === 0 ? 'questions' : null))
 const blockMessage = computed(() => {
   if (blockReason.value === 'questions') {
     return `QUESTION LIMIT REACHED: ALL ${usage.value.questions_limit} QUESTIONS ARE USED`
   }
-  if (blockReason.value === 'chats') {
-    return `CHAT LIMIT REACHED: OPEN ONE OF YOUR ${usage.value.chats_limit} CHATS TO CONTINUE`
-  }
   return serverNotice.value
 })
-const canCreateChat = computed(() => !chatsFull.value && questionsLeft.value > 0)
-const placeholder = computed(() => {
-  if (blockReason.value === 'questions') return 'No questions left'
-  if (blockReason.value === 'chats') return 'Open one of your chats to continue'
-  return 'Ask about Andriy, or say: show me his photos'
-})
+const placeholder = computed(() =>
+  blockReason.value === 'questions' ? 'No questions left' : 'Ask about Andriy, or say: show me his photos',
+)
 
 // saving is throttled: while an answer streams the messages change on every token
 let saveTimer = null
 const saveSession = () => {
   saveTimer = null
   try {
-    const data = { chats: chats.value, activeId: activeId.value }
+    const data = { id: threadId, messages: messages.value }
     // the rendered HTML ("answer") is not stored: it is rebuilt from the Markdown ("raw")
     localStorage.setItem(STORE_KEY, JSON.stringify(data, (k, v) => (k === 'answer' ? undefined : v)))
   } catch {
-    /* storage is full or blocked: the chats just live until the page is closed */
+    /* storage is full or blocked: the conversation just lives until the page is closed */
   }
 }
-watch([chats, activeId], () => { if (!saveTimer) saveTimer = setTimeout(saveSession, 300) }, { deep: true })
-
-const createChat = () => {
-  chats.value.unshift({ id: newId(), title: DEFAULT_TITLE, messages: [] })
-  return chats.value[0] // the reactive proxy
-}
-
-// a chat without a single message is not worth keeping
-const pruneEmpty = (keepId = null) => {
-  chats.value = chats.value.filter((c) => c.messages.length || c.id === keepId)
-}
+watch(messages, () => { if (!saveTimer) saveTimer = setTimeout(saveSession, 300) }, { deep: true })
 
 const resetScroll = async (toBottom) => {
   await nextTick()
   if (chatContainer.value) chatContainer.value.scrollTop = toBottom ? chatContainer.value.scrollHeight : 0
 }
 
-// the main screen (the portrait); the chats stay in the list
+// the main screen (the portrait); the conversation is kept and continues with the next question
 const goHome = () => {
   if (isLoading.value) return
-  pruneEmpty()
-  activeId.value = null
+  home.value = true
   question.value = ''
-  sidebarOpen.value = false
   resetScroll(false)
-}
-
-const newChat = () => {
-  if (isLoading.value) return
-  sidebarOpen.value = false
-  if (activeChat.value && !activeChat.value.messages.length) return // already an empty one
-  pruneEmpty()
-  activeId.value = createChat().id
-  resetScroll(false)
-}
-
-const openChat = (id) => {
-  if (isLoading.value) return
-  pruneEmpty(id)
-  activeId.value = id
-  sidebarOpen.value = false
-  resetScroll(true)
-}
-
-const deleteChat = (id) => {
-  if (isLoading.value) return
-  chats.value = chats.value.filter((c) => c.id !== id)
-  if (activeId.value === id) activeId.value = null
 }
 
 // reads Server-Sent Events ("data: {...}\n\n") from a fetch response
@@ -271,6 +228,30 @@ const quickPrompts = [
   },
 ]
 
+// Questions for the falling tabs on both sides of the screen; they follow the topics of the notes
+const sideQuestions = [
+  "Show me Andriy's photos",
+  'How did Andriy win an AI hackathon?',
+  'Show his AI hackathon certificate',
+  'What does he know about async in Python?',
+  'How does Python manage memory, according to his notes?',
+  'What did he learn about the Python event loop?',
+  'What does he know about multithreading and multiprocessing?',
+  'What are the CPython internals he studied?',
+  'How does he approach testing in Python?',
+  'Does Andriy know Go? What about goroutines?',
+  'Which design patterns has he studied?',
+  'What did he learn about PostgreSQL isolation levels?',
+  'What does he know about the N+1 problem?',
+  'What does idempotency mean in his notes?',
+  'What does he know about refresh tokens?',
+  'What does he know about JavaScript closures?',
+  'Tell me about his family and pets',
+  'What are his hobbies?',
+  'What technologies does Andriy work with?',
+  'What is Andriy learning right now?',
+]
+
 const askMentor = () => sendQuestion(question.value)
 const askQuickPrompt = (item) => sendQuestion(item.prompt)
 
@@ -281,16 +262,8 @@ const sendQuestion = async (text) => {
   question.value = ''
   serverNotice.value = ''
 
-  // from the main screen the first question starts a new chat
-  let chat = activeChat.value
-  if (!chat) {
-    chat = createChat()
-    activeId.value = chat.id
-  }
-  const msgs = chat.messages // navigation is locked while loading, so this chat stays the active one
-  if (chat.title === DEFAULT_TITLE) {
-    chat.title = userQuery.length > 34 ? `${userQuery.slice(0, 34).trimEnd()}…` : userQuery
-  }
+  home.value = false
+  const msgs = messages.value // the reactive proxy
 
   // Add user's message to UI
   msgs.push({ role: 'user', content: userQuery })
@@ -303,7 +276,7 @@ const sendQuestion = async (text) => {
     const response = await fetch(API_URL, {
       method: 'POST',
       headers: apiHeaders,
-      body: JSON.stringify({ message: userQuery, thread_id: chat.id })
+      body: JSON.stringify({ message: userQuery, thread_id: threadId })
     })
 
     if (!response.ok) {
@@ -375,10 +348,6 @@ const sendQuestion = async (text) => {
     console.error('chat request failed:', error)
     if (rejected) {
       msgs.pop() // the refused question disappears from the chat
-      if (!msgs.length) {
-        chats.value = chats.value.filter((c) => c.id !== chat.id)
-        activeId.value = null
-      }
     } else {
       msgs.push({
         role: 'error',
@@ -398,11 +367,10 @@ const sendQuestion = async (text) => {
 
 <template>
   <div class="shell">
+    <FallingQuestions :questions="sideQuestions" :disabled="isLoading || !!blockReason" @pick="sendQuestion" />
+
     <!-- Status bar -->
     <header class="topbar">
-      <button class="menu-btn" aria-label="Chats" @click="sidebarOpen = !sidebarOpen">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
-      </button>
       <button
         class="brand"
         title="Back to the main screen"
@@ -417,54 +385,16 @@ const sendQuestion = async (text) => {
         <span class="stat"><i class="dot"></i>LIVE</span>
         <span class="stat">QUESTIONS <b>{{ usage.questions_used }}/{{ usage.questions_limit }}</b></span>
         <span class="stat hide-sm">MODEL <b>{{ MODEL_LABEL }}</b></span>
-        <span class="stat hide-sm">THREAD <b>{{ activeId ? activeId.slice(0, 6) : '------' }}</b></span>
+        <span class="stat hide-sm">THREAD <b>{{ threadId.slice(0, 6) }}</b></span>
       </div>
     </header>
 
     <div class="body">
-      <!-- Your chats -->
-      <aside class="sidebar" :class="{ open: sidebarOpen }">
-        <button
-          class="new-chat"
-          :disabled="isLoading || !canCreateChat"
-          :title="canCreateChat ? 'Start a new chat' : 'No chats or questions left'"
-          @click="newChat"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
-          NEW CHAT
-        </button>
-        <p class="side-title">YOUR CHATS // {{ usage.chats_used }} OF {{ usage.chats_limit }} USED</p>
-        <ul v-if="chats.length" class="chat-list">
-          <li
-            v-for="chat in chats"
-            :key="chat.id"
-            class="chat-item"
-            :class="{ active: chat.id === activeId }"
-          >
-            <button class="chat-open" :disabled="isLoading" @click="openChat(chat.id)">
-              <span class="chat-title">{{ chat.title }}</span>
-              <span class="chat-meta">{{ chat.messages.length }} MSG</span>
-            </button>
-            <button
-              class="chat-del"
-              title="Delete chat"
-              aria-label="Delete chat"
-              :disabled="isLoading"
-              @click="deleteChat(chat.id)"
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-            </button>
-          </li>
-        </ul>
-        <p v-else class="side-empty">No chats yet. Ask something and it will appear here.</p>
-      </aside>
-      <div v-if="sidebarOpen" class="backdrop" @click="sidebarOpen = false"></div>
-
       <section class="main">
     <main class="chat-box" ref="chatContainer">
       <div class="column">
         <!-- Empty state: animated binary portrait + ready-made questions -->
-        <section v-if="!messages.length && !isLoading" class="hero">
+        <section v-if="showHero" class="hero">
           <div class="portrait frame">
             <span class="cap cap-tl">[01] SUBJECT</span>
             <span class="cap cap-tr">ANDRIY.IMG</span>
@@ -473,7 +403,7 @@ const sendQuestion = async (text) => {
             <span class="cap cap-br">CLICK TO REPLAY</span>
           </div>
           <h1>Andriy</h1>
-          <p class="role">SOFTWARE ENGINEER // EX-MARINE OFFICER</p>
+          <p class="role">SOFTWARE ENGINEER</p>
           <p class="lead">
             Ask the AI about Andriy. It answers from his own notes and can show his photos.
           </p>
@@ -493,6 +423,7 @@ const sendQuestion = async (text) => {
           </div>
         </section>
 
+        <template v-if="!showHero">
         <div v-for="(msg, index) in messages" :key="index" :class="['row', msg.role]">
           <!-- User's message -->
           <div v-if="msg.role === 'user'" class="bubble user-bubble">
@@ -523,6 +454,7 @@ const sendQuestion = async (text) => {
             {{ msg.content }}
           </div>
         </div>
+        </template>
 
         <!-- Live steps while the agent works -->
         <div v-if="isLoading && !streaming" class="steps-live frame">
@@ -552,12 +484,10 @@ const sendQuestion = async (text) => {
           <i v-for="n in usage.questions_limit" :key="n" :class="{ on: n <= usage.questions_used }"></i>
         </span>
         <b>{{ usage.questions_used }}/{{ usage.questions_limit }}</b>
-        <span class="usage-gap"></span>
-        <span>CHATS <b>{{ usage.chats_used }}/{{ usage.chats_limit }}</b></span>
       </div>
 
       <!-- Compact chips once the conversation has started -->
-      <div v-if="messages.length" class="chips">
+      <div v-if="!showHero" class="chips">
         <button
           v-for="item in quickPrompts"
           :key="item.label"
@@ -693,7 +623,7 @@ body {
 /* ───────────── status bar ───────────── */
 .topbar {
   position: relative;
-  z-index: 40; /* above the drawer, so the menu button stays reachable */
+  z-index: 40;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -753,15 +683,6 @@ body {
   transition: background-color 0.2s;
 }
 
-.menu-btn {
-  display: none; /* shown on small screens only */
-  padding: 4px;
-  color: var(--orange);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
 .status {
   display: flex;
   align-items: center;
@@ -789,7 +710,7 @@ body {
   }
 }
 
-/* ───────────── layout: chat list on the left, conversation on the right ───────────── */
+/* ───────────── layout ───────────── */
 .body {
   display: flex;
   flex: 1;
@@ -801,161 +722,6 @@ body {
   flex: 1;
   flex-direction: column;
   min-width: 0;
-}
-
-.sidebar {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  gap: 10px;
-  width: 268px;
-  padding: 16px 12px;
-  overflow-y: auto;
-  background: rgba(8, 8, 8, 0.72);
-  border-right: 1px solid var(--line-strong);
-  backdrop-filter: blur(8px);
-}
-
-.new-chat {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 11px 12px;
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: var(--orange);
-  background: rgba(229, 87, 28, 0.08);
-  border: 1px solid var(--orange);
-  border-radius: 2px;
-  cursor: pointer;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.new-chat:hover:not(:disabled) {
-  color: var(--bg);
-  background: var(--orange);
-}
-
-.new-chat:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.side-title {
-  margin: 10px 4px 0;
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.2em;
-  color: var(--muted);
-}
-
-.side-empty {
-  margin: 4px;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  color: var(--muted);
-  opacity: 0.8;
-}
-
-.chat-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.chat-item {
-  display: flex;
-  align-items: center;
-  border: 1px solid transparent;
-  border-left: 2px solid var(--line);
-  transition: background-color 0.2s, border-color 0.2s;
-}
-
-.chat-item:hover {
-  background: rgba(206, 206, 206, 0.05);
-}
-
-.chat-item.active {
-  background: rgba(229, 87, 28, 0.1);
-  border-color: rgba(229, 87, 28, 0.35);
-  border-left: 2px solid var(--orange);
-}
-
-.chat-open {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  padding: 9px 10px;
-  text-align: left;
-  font: inherit;
-  color: var(--ink);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-.chat-open:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.chat-title {
-  overflow: hidden;
-  font-size: 0.88rem;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.chat-item.active .chat-title {
-  color: var(--ink-strong);
-}
-
-.chat-meta {
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.16em;
-  color: var(--muted);
-}
-
-.chat-del {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-right: 6px;
-  color: var(--muted);
-  background: none;
-  border: none;
-  opacity: 0;
-  cursor: pointer;
-  transition: opacity 0.2s, color 0.2s, background-color 0.2s;
-}
-
-.chat-item:hover .chat-del,
-.chat-del:focus-visible {
-  opacity: 1;
-}
-
-.chat-del:hover:not(:disabled) {
-  color: var(--red);
-  background: rgba(239, 32, 7, 0.1);
-}
-
-.chat-del:disabled {
-  cursor: not-allowed;
-}
-
-.backdrop {
-  display: none;
 }
 
 /* ───────────── chat ───────────── */
@@ -1514,10 +1280,6 @@ body {
   background: var(--red); /* the last question or none left */
 }
 
-.usage-gap {
-  flex: 1;
-}
-
 .notice {
   margin: 0 0 10px;
   padding: 9px 12px;
@@ -1634,48 +1396,6 @@ body {
 }
 
 /* ───────────── small screens & reduced motion ───────────── */
-/* the chat list turns into a drawer */
-@media (max-width: 860px) {
-  .menu-btn {
-    display: block;
-  }
-
-  .topbar {
-    justify-content: flex-start;
-  }
-
-  .status {
-    margin-left: auto;
-  }
-
-  .sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 30;
-    width: min(300px, 84vw);
-    padding-top: 64px; /* below the status bar */
-    background: #0a0a0a;
-    transform: translateX(-100%);
-    transition: transform 0.25s ease;
-  }
-
-  .sidebar.open {
-    transform: none;
-  }
-
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 25;
-    display: block;
-    background: rgba(0, 0, 0, 0.65);
-  }
-
-  .chat-del {
-    opacity: 1; /* there is no hover on touch screens */
-  }
-}
-
 @media (max-width: 640px) {
   .topbar { padding: 12px 16px; }
   .hide-sm { display: none; }

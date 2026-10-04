@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     PHOTO_FOLDERS: list[str] = ["About me"]  # vault folders with photos not linked from notes
 
     # ───────────── usage limits (enforced on the server) ─────────────
-    MAX_QUESTIONS_PER_USER: int = 5  # questions in total per visitor
-    MAX_CHATS_PER_USER: int = 2  # chats (agent memory threads) per visitor
+    MAX_QUESTIONS_PER_USER: int = 10  # questions in total per visitor
+    MAX_CHATS_PER_USER: int = 1  # chats (agent memory threads) per visitor
     # safety net against a visitor who clears the browser storage to get a new identity
     MAX_QUESTIONS_PER_IP: int = 15
     MAX_MESSAGE_CHARS: int = 1000
