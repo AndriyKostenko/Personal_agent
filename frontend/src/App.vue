@@ -405,7 +405,11 @@ const sendQuestion = async (text, shown = text) => {
 
 <template>
   <div class="shell">
-    <FallingQuestions :questions="sideQuestions" :disabled="isLoading || !!blockReason" @pick="sendQuestion" />
+    <FallingQuestions
+      :questions="sideQuestions"
+      :disabled="isLoading || !!blockReason"
+      @pick="sendQuestion"
+    />
 
     <!-- Status bar -->
     <header class="topbar">
@@ -443,7 +447,7 @@ const sendQuestion = async (text, shown = text) => {
           <h1>Andriy <span class="ver">v2.0</span></h1>
           <p class="role">SOFTWARE ENGINEER</p>
           <p class="lead">
-            I'm the Personal Andriy's Agent. <br /> I answer from his own notes and can show his photos.
+            I'm the Personal Andriy's Agent.
           </p>
           <div class="cards">
             <button
@@ -462,6 +466,10 @@ const sendQuestion = async (text, shown = text) => {
         </section>
 
         <template v-if="!showHero">
+        <!-- the same animated portrait, small, in the top left corner of the chat -->
+        <div class="inline-portrait frame">
+          <BinaryPortrait src="/hero.jpg" :cell-w="3.2" :cell-h="5" />
+        </div>
         <div v-for="(msg, index) in messages" :key="index" :class="['row', msg.role]">
           <!-- User's message -->
           <div v-if="msg.role === 'user'" class="bubble user-bubble">
@@ -624,14 +632,22 @@ body {
   isolation: isolate;
 }
 
-/* backdrop: a faint technical grid, an orange glow top right, a dark red one bottom left, grain */
+.inline-portrait {
+  align-self: flex-start;
+  width: 124px;
+  padding: 8px;
+  background: rgba(13, 13, 13, 0.7);
+  border: 1px solid var(--line-strong);
+}
+
+/* backdrop: a faint technical grid, a strong orange glow spreading from the top right corner across the screen, a dark red one bottom left, grain */
 .shell::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -2;
   background:
-    radial-gradient(820px 480px at 92% -10%, rgba(229, 87, 28, 0.16), transparent 62%),
+    radial-gradient(ellipse 95vw 95vh at 100% 0%, rgba(229, 87, 28, 0.5), rgba(229, 87, 28, 0.3) 30%, rgba(159, 31, 13, 0.15) 62%, transparent 100%),
     radial-gradient(700px 480px at -8% 110%, rgba(159, 31, 13, 0.2), transparent 66%),
     linear-gradient(rgba(206, 206, 206, 0.035) 1px, transparent 1px) 0 0 / 48px 48px,
     linear-gradient(90deg, rgba(206, 206, 206, 0.035) 1px, transparent 1px) 0 0 / 48px 48px,
