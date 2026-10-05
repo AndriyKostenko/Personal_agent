@@ -39,6 +39,30 @@ class Settings(BaseSettings):
     # protects /index and /search, which must not be public; empty = open (local development)
     ADMIN_API_KEY: str = ""
 
+    # ───────────── booking via Google Calendar ─────────────
+    # OAuth user credentials; get the refresh token with `python utils/google_consent.py`.
+    # Any of the three empty = booking is disabled and the booking tools are not registered.
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REFRESH_TOKEN: str = ""
+    CALENDAR_ID: str = "primary"
+    BOOKING_TIMEZONE: str = "Etc/GMT+6"  # IANA name (this is UTC-6, no DST); timezone of the working hours
+    WORK_DAYS: list[int] = [0, 1, 2, 3, 4]  # Monday = 0
+    WORK_START_HOUR: int = 10
+    WORK_END_HOUR: int = 18
+    SLOT_MINUTES: int = 30
+    BUFFER_MINUTES: int = 10  # free gap required around every existing event
+    MIN_NOTICE_HOURS: int = 24
+    BOOKING_HORIZON_DAYS: int = 30
+    BOOKING_MEET_LINK: bool = True  # attach a Google Meet link to the event
+    MAX_BOOKINGS_PER_USER: int = 1  # not enforced yet (abuse limits are a later step)
+
+    @property
+    def booking_enabled(self) -> bool:
+        return bool(
+            self.GOOGLE_CLIENT_ID and self.GOOGLE_CLIENT_SECRET and self.GOOGLE_REFRESH_TOKEN
+        )
+
     class Config:
         env_file = BACKEND_DIR / ".env"
 

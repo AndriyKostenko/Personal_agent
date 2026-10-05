@@ -9,6 +9,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 
+from services.calendar_service import CalendarService
 from services.vector_service import VectorStoreService
 from core.settings import Settings
 from agent.tools import build_tools
@@ -21,14 +22,22 @@ from agent.tools import build_tools
 #          in_scope     │      out_of_scope
 #        ┌──────────────┴──────────────┐
 #        ▼                             ▼
-#   ┌─────────┐   tool_calls?      ┌─────────┐
-#   │  agent  │ ── yes ──────────▶ │  tools  │  (search_about_me / find_photos)
-#   │  (LLM)  │ ◀───────────────── │         │
-#   └────┬────┘   results back     └─────────┘         ┌─────────┐
-#        │ no tool_calls                               │ refuse  │
-#        ▼                                             └────┬────┘
-#       END                                                 ▼
-#                                                          END
+#   ┌─────────┐                   ┌─────────┐
+#   │  agent  │                   │ refuse  │  (fixed message, no LLM, no tools)
+#   │  (LLM)  │                   └────┬────┘
+#   └─┬─────┬─┘                        ▼
+#     │     │ no tool_calls           END
+#     │     ▼
+#     │    END
+#     │ tool_calls
+#     ▼
+#   ┌─────────┐
+#   │  tools  │  (search_about_me / find_photos)
+#   └────┬────┘
+#        │ results back to `agent` (the loop)
+#        └──────────▶ agent
+#
+# `tools` is reachable ONLY from `agent`, so out_of_scope never calls a tool.
 # ────────────────────────────────────────────────────────────────────
 
 
@@ -94,7 +103,12 @@ class Agent:
         "general chit-chat, writing code for the user, etc.). When in doubt, choose in_scope."
     )
 
-    def __init__(self, settings: Settings, vector_service: VectorStoreService):
+    def __init__(
+        self,
+        settings: Settings,
+        vector_service: VectorStoreService,
+        calendar_service: CalendarService | None = None,
+    ):
         self.settings = settings
         llm = ChatOpenAI(
             model="openai/gpt-4o-mini",
@@ -102,7 +116,9 @@ class Agent:
             base_url="https://openrouter.ai/api/v1",
             temperature=0,
         )
-        self.tools = build_tools(vector_service=vector_service)
+        self.tools = build_tools(
+            vector_service=vector_service, calendar_service=calendar_service
+        )
         self.llm_with_tools = llm.bind_tools(self.tools)
         self.classifier = llm.with_structured_output(Intent)
         self.graph = self._build_graph()
