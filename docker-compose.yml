@@ -41,6 +41,22 @@ services:
       # Single reverse proxy in front (host Nginx)
       TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-1}
       CORS_ORIGINS: ${CORS_ORIGINS:-[]}
+      # Booking via Google Calendar: empty credentials = booking disabled.
+      # The defaults below mirror backend/core/settings.py.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REFRESH_TOKEN: ${GOOGLE_REFRESH_TOKEN:-}
+      CALENDAR_ID: ${CALENDAR_ID:-primary}
+      BOOKING_TIMEZONE: ${BOOKING_TIMEZONE:-Etc/GMT+6}
+      WORK_START_HOUR: ${WORK_START_HOUR:-10}
+      WORK_END_HOUR: ${WORK_END_HOUR:-18}
+      SLOT_MINUTES: ${SLOT_MINUTES:-30}
+      BUFFER_MINUTES: ${BUFFER_MINUTES:-10}
+      MIN_NOTICE_HOURS: ${MIN_NOTICE_HOURS:-24}
+      BOOKING_HORIZON_DAYS: ${BOOKING_HORIZON_DAYS:-30}
+      MAX_BOOKINGS_PER_USER: ${MAX_BOOKINGS_PER_USER:-1}
+      MAX_BOOKINGS_PER_IP: ${MAX_BOOKINGS_PER_IP:-2}
+      MAX_BOOKINGS_PER_DAY: ${MAX_BOOKINGS_PER_DAY:-10}
     volumes:
       - appdata:/data
     expose:

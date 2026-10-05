@@ -93,10 +93,16 @@ const usage = ref({ questions_used: 0, questions_limit: 10 })
 const questionsLeft = computed(() => Math.max(0, usage.value.questions_limit - usage.value.questions_used))
 const serverNotice = ref('') // a limit message that came with a refusal of the server
 
+const bookingEnabled = ref(false) // the server has the booking tools: show /call and its card
+
 const loadUsage = async () => {
   try {
     const response = await fetch(USAGE_URL, { headers: { 'X-Client-Id': clientId } })
-    if (response.ok) usage.value = await response.json()
+    if (response.ok) {
+      const data = await response.json()
+      bookingEnabled.value = !!data.booking_enabled
+      usage.value = data
+    }
   } catch {
     /* the backend is not reachable: the defaults stay, the server checks anyway */
   }
@@ -228,6 +234,18 @@ const quickPrompts = [
   },
 ]
 
+const CALL_PROMPT = 'I would like to book a call with Andriy. What times are available?'
+
+// the cards of the hero screen and the chips of a started chat; "call" only if booking is enabled
+const cardPrompts = computed(() =>
+  bookingEnabled.value
+    ? [
+        ...quickPrompts,
+        { tag: '04 / CALL', label: 'Book a call', hint: 'Pick a free time slot', prompt: CALL_PROMPT },
+      ]
+    : quickPrompts,
+)
+
 // Questions for the falling tabs on both sides of the screen; they follow the topics of the notes
 const sideQuestions = [
   "Show me Andriy's photos",
@@ -274,12 +292,43 @@ const commands = [
   },
 ]
 
+const availableCommands = computed(() =>
+  bookingEnabled.value
+    ? [...commands, { name: '/call', hint: 'Book a call with Andriy', prompt: CALL_PROMPT }]
+    : commands,
+)
+
 // the menu while the visitor is typing the command name ("/" or "/sho")
 const suggestions = computed(() => {
   const typed = question.value.trimStart().toLowerCase()
   if (!typed.startsWith('/') || typed.includes(' ')) return []
-  return commands.filter((c) => c.name.startsWith(typed))
+  return availableCommands.value.filter((c) => c.name.startsWith(typed))
 })
+
+// keyboard selection in the menu: arrows move, Enter runs, Tab completes, Esc closes
+const menuOpen = computed(() => suggestions.value.length > 0 && !isLoading.value && !blockReason.value)
+const activeIndex = ref(0)
+watch(suggestions, () => (activeIndex.value = 0))
+
+const onPromptKeydown = (e) => {
+  if (!menuOpen.value || e.isComposing) return
+  const count = suggestions.value.length
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    activeIndex.value = (activeIndex.value + 1) % count
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    activeIndex.value = (activeIndex.value - 1 + count) % count
+  } else if (e.key === 'Enter') {
+    e.preventDefault() // otherwise the form would submit the half-typed command
+    runCommand(suggestions.value[activeIndex.value])
+  } else if (e.key === 'Tab') {
+    e.preventDefault()
+    question.value = suggestions.value[activeIndex.value].name
+  } else if (e.key === 'Escape') {
+    question.value = ''
+  }
+}
 
 const runCommand = (cmd) => sendQuestion(cmd.prompt, cmd.name)
 
@@ -287,9 +336,11 @@ const askMentor = () => {
   const typed = question.value.trim()
   if (!typed.startsWith('/')) return sendQuestion(typed)
   const lower = typed.toLowerCase()
-  const cmd = commands.find((c) => c.name === lower) || (suggestions.value.length === 1 ? suggestions.value[0] : null)
+  const cmd =
+    availableCommands.value.find((c) => c.name === lower) ||
+    (suggestions.value.length === 1 ? suggestions.value[0] : null)
   if (cmd) return runCommand(cmd)
-  serverNotice.value = `UNKNOWN COMMAND. TRY ${commands.map((c) => c.name.toUpperCase()).join(', ')}`
+  serverNotice.value = `UNKNOWN COMMAND. TRY ${availableCommands.value.map((c) => c.name.toUpperCase()).join(', ')}`
 }
 const askQuickPrompt = (item) => sendQuestion(item.prompt)
 
@@ -449,9 +500,9 @@ const sendQuestion = async (text, shown = text) => {
           <p class="lead">
             I'm AgentAndriy, Andriy's personal agent.
           </p>
-          <div class="cards">
+          <div class="cards" :class="{ 'cards--four': cardPrompts.length > 3 }">
             <button
-              v-for="item in quickPrompts"
+              v-for="item in cardPrompts"
               :key="item.label"
               class="card frame"
               :disabled="!!blockReason"
@@ -536,7 +587,7 @@ const sendQuestion = async (text, shown = text) => {
       <!-- Compact chips once the conversation has started -->
       <div v-if="!showHero" class="chips">
         <button
-          v-for="item in quickPrompts"
+          v-for="item in cardPrompts"
           :key="item.label"
           class="chip"
           :disabled="isLoading || !!blockReason"
@@ -547,13 +598,17 @@ const sendQuestion = async (text, shown = text) => {
       </div>
 
       <div class="composer-wrap">
-      <div v-if="suggestions.length && !isLoading && !blockReason" class="slash frame" role="listbox">
+      <div v-if="menuOpen" id="slash-menu" class="slash frame" role="listbox">
         <button
-          v-for="c in suggestions"
+          v-for="(c, i) in suggestions"
+          :id="`slash-${i}`"
           :key="c.name"
           type="button"
           class="slash-item"
+          :class="{ active: i === activeIndex }"
           role="option"
+          :aria-selected="i === activeIndex"
+          @mousemove="activeIndex = i"
           @click="runCommand(c)"
         >
           <b>{{ c.name }}</b><span>{{ c.hint }}</span>
@@ -566,6 +621,9 @@ const sendQuestion = async (text, shown = text) => {
           :placeholder="placeholder"
           maxlength="1000"
           :disabled="isLoading || !!blockReason"
+          :aria-controls="menuOpen ? 'slash-menu' : undefined"
+          :aria-activedescendant="menuOpen ? `slash-${activeIndex}` : undefined"
+          @keydown="onPromptKeydown"
         />
         <button
           type="submit"
@@ -889,6 +947,10 @@ body {
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   width: 100%;
+}
+
+.cards--four {
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .card {
@@ -1368,6 +1430,7 @@ body {
   letter-spacing: 0.06em;
 }
 
+.slash-item.active,
 .slash-item:hover {
   background: rgba(229, 87, 28, 0.1);
   color: var(--ink-strong);

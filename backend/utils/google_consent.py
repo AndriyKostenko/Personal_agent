@@ -7,6 +7,7 @@ Open the printed URL, approve access, and copy the printed GOOGLE_REFRESH_TOKEN 
 """
 
 import sys
+import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -53,7 +54,9 @@ def main():
             "prompt": "consent",  # forces a refresh token even if access was granted before
         }
     )
-    print(f"Open this URL and approve access:\n\n{url}\n")
+    print("Opening your browser to approve access. If it does not open, copy this URL as ONE line:\n")
+    print(f"{url}\n")
+    webbrowser.open(url)
 
     HTTPServer(("127.0.0.1", PORT), _Handler).handle_request()
     if not _Handler.code:
