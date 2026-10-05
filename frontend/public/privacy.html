@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+    <link rel="icon" href="/favicon.ico">
+    <title>Privacy Policy · About Andriy</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #080808;
+        --ink: #cecece;
+        --ink-strong: #f2f0ed;
+        --muted: #afa9a3;
+        --orange: #e5571c;
+        --line: rgba(206, 206, 206, 0.16);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 16px/1.65 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      main { max-width: 720px; margin: 0 auto; padding: 48px 20px 80px; }
+      h1 { color: var(--ink-strong); font-size: 1.9rem; margin: 0 0 4px; }
+      h2 {
+        color: var(--ink-strong);
+        font-size: 1.1rem;
+        margin: 36px 0 8px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+      }
+      p, li { margin: 8px 0; }
+      ul { padding-left: 22px; }
+      a { color: var(--orange); }
+      .meta { color: var(--muted); font-size: 0.9rem; }
+      .back { display: inline-block; margin-bottom: 28px; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back" href="/">&larr; Back to the assistant</a>
+      <h1>Privacy Policy</h1>
+      <p class="meta">Last updated: 5 October 2026</p>
+
+      <p>
+        This website, <strong>agentandriy.dev</strong>, is a personal project by Andriy Kostenko
+        ("I", "me"). It is an AI assistant that answers questions about me and lets visitors book a
+        call with me. This page explains what data the site handles and why.
+      </p>
+
+      <h2>What the site collects</h2>
+      <ul>
+        <li>
+          <strong>Your messages.</strong> The questions you type into the chat. They are used only
+          to produce an answer. The conversation is kept in the server's memory for the
+          current session and is cleared when the server restarts.
+        </li>
+        <li>
+          <strong>A random browser ID and your IP address.</strong> The browser generates a random
+          identifier and stores it locally; together with your IP address it is used to count
+          questions and enforce usage limits (to prevent abuse). No account is needed and no
+          name is attached to these counters.
+        </li>
+        <li>
+          <strong>Booking details</strong> (only if you book a call): your name, e-mail address,
+          the topic you give, and the time slot you choose.
+        </li>
+      </ul>
+      <p>The site has no advertising, no analytics trackers and no tracking cookies.</p>
+
+      <h2>How booking works and Google data</h2>
+      <p>
+        Booking uses the Google Calendar API. <strong>You do not sign in with Google</strong> and
+        the site never receives your Google account data. The site connects only to
+        <em>my own</em> Google Calendar, with my authorization, to:
+      </p>
+      <ul>
+        <li>read when I am busy or free (free/busy information), so only open time slots are offered;</li>
+        <li>
+          create a calendar event for the call that includes your name, e-mail and topic, and
+          let Google send you the invitation (with a Google Meet link).
+        </li>
+      </ul>
+      <p>
+        The information from my calendar is used only to offer free slots and is not stored or
+        shown to visitors beyond those slots. The use of information received from Google APIs
+        adheres to the
+        <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Google API Services User Data Policy</a>,
+        including the Limited Use requirements.
+      </p>
+
+      <h2>Third parties</h2>
+      <ul>
+        <li>
+          <strong>AI providers.</strong> Your chat messages are sent to a language-model provider
+          (via OpenRouter) to generate answers. Please do not enter sensitive personal information
+          in the chat.
+        </li>
+        <li>
+          <strong>Google.</strong> Booking details are stored in the calendar event and Google
+          sends the invitation e-mail. Google's own privacy policy applies to that.
+        </li>
+        <li><strong>Hosting.</strong> The site runs on a server I operate; standard web-server logs (such as IP address and request time) may be kept for security and troubleshooting.</li>
+      </ul>
+      <p>I do not sell your data and I do not share it for advertising.</p>
+
+      <h2>How long data is kept</h2>
+      <ul>
+        <li>Chat conversations: in memory only, until the server restarts.</li>
+        <li>Usage counters (browser ID, IP address): kept while needed to enforce the limits.</li>
+        <li>Calendar events: kept in my calendar until I delete them.</li>
+      </ul>
+
+      <h2>Your choices</h2>
+      <p>
+        You can ask me to delete a booking or any data connected with you, or ask what is stored,
+        by e-mailing me. You can also clear your browser's site data to remove the random ID
+        stored in your browser.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Andriy Kostenko &middot;
+        <a href="mailto:a.kostenkouk@gmail.com">a.kostenkouk@gmail.com</a>
+      </p>
+
+      <h2>Changes</h2>
+      <p>If this policy changes, the new version will be published on this page with an updated date.</p>
+    </main>
+  </body>
+</html>

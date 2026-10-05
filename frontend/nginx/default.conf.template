@@ -62,9 +62,9 @@ server {
         include /etc/nginx/snippets/security-headers.conf;
     }
 
-    # the single-page app: any other path gets index.html
+    # the single-page app: any other path gets index.html ($uri.html serves /privacy)
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri.html $uri/ /index.html;
         add_header Cache-Control "no-cache";
         include /etc/nginx/snippets/security-headers.conf;
     }

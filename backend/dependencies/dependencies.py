@@ -10,12 +10,14 @@ from services.vector_service import VectorStoreService
 from services.rag_service import RagService
 from agent.agent import Agent
 from services.usage_service import UsageService
+from services.calendar_service import CalendarService
 
 # creating a singleton to garantee that qdrant_db will be obtained only once
 vectore_store_instance = VectorStoreService(
     collection_name=settings.COLLECTION_NAME, settings=settings
 )
-agent_instance = Agent(settings, vectore_store_instance)
+calendar_instance = CalendarService(settings) if settings.booking_enabled else None
+agent_instance = Agent(settings, vectore_store_instance, calendar_instance)
 usage_instance = UsageService(settings)
 
 
