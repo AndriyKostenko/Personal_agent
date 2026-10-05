@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 
 from services.calendar_service import CalendarService
+from services.usage_service import UsageService
 from services.vector_service import VectorStoreService
 from core.settings import Settings
 from agent.tools import build_tools
@@ -90,6 +91,25 @@ class Agent:
         "add code that is not in the notes.\n"
         "- Mention the note titles you used at the end ('Sources: ...')."
     )
+    # appended to SYSTEM_PROMPT only when the booking tools exist
+    BOOKING_PROMPT = (
+        "BOOKING A CALL (tools check_availability and book_call):\n"
+        "- Current date and time: {now} ({tz}). Work out 'tomorrow', 'next Tuesday' and similar "
+        "from it.\n"
+        "- A call lasts {minutes} minutes. Slot times are in {tz}: always name the timezone when "
+        "you propose times, and convert carefully if the visitor uses another one.\n"
+        "- Never invent a free time. First call check_availability with a date range (at most "
+        "14 days), then offer ONLY slots it returned. Offer at most 3 days with 2-3 times each in a "
+        "short list and let the visitor ask for more; never list everything.\n"
+        "- Before booking you need the visitor's full name, e-mail address and a short topic. "
+        "Ask for what is missing. Never guess or make up an e-mail.\n"
+        "- Before calling book_call, repeat the slot, name, e-mail and topic and ask for "
+        "confirmation. Call book_call ONLY after the visitor clearly says yes in a LATER "
+        "message, never in the same turn in which you ask.\n"
+        "- Pass `start` exactly as check_availability returned it. Report the book_call result "
+        "faithfully; if it failed, say so and offer other slots.\n"
+        "- Booking replies need no search_about_me call and no 'Sources:' line."
+    )
     REFUSAL = "I can only answer questions about Andriy and his notes."
     CLASSIFIER_PROMPT = (
         "You route messages for a chatbot that knows everything about its owner, Andriy: "
@@ -99,6 +119,9 @@ class Agent:
         "are in_scope.\n"
         "Technical questions that his notes may cover (Python, Go, JavaScript, databases...) "
         "are in_scope, and so are follow-ups to the previous messages.\n"
+        "Booking or scheduling a call or meeting with Andriy is in_scope, and so is every message "
+        "inside such a conversation (choosing a time, giving a name or an e-mail, saying yes or "
+        "no).\n"
         "Choose out_of_scope ONLY for clearly unrelated requests (weather, news, "
         "general chit-chat, writing code for the user, etc.). When in doubt, choose in_scope."
     )
@@ -108,8 +131,10 @@ class Agent:
         settings: Settings,
         vector_service: VectorStoreService,
         calendar_service: CalendarService | None = None,
+        usage_service: UsageService | None = None,
     ):
         self.settings = settings
+        self.calendar_service = calendar_service
         llm = ChatOpenAI(
             model="openai/gpt-4o-mini",
             api_key=settings.OPEN_ROUTER_API_KEY,
@@ -117,9 +142,12 @@ class Agent:
             temperature=0,
         )
         self.tools = build_tools(
-            vector_service=vector_service, calendar_service=calendar_service
+            vector_service=vector_service,
+            calendar_service=calendar_service,
+            usage_service=usage_service,
         )
         self.llm_with_tools = llm.bind_tools(self.tools)
+        self.booking_enabled = any(t.name == "book_call" for t in self.tools)
         self.classifier = llm.with_structured_output(Intent)
         self.graph = self._build_graph()
 
@@ -139,10 +167,21 @@ class Agent:
         )
         return {"intent": result.intent}
 
+    def _system_prompt(self) -> str:
+        """The booking rules (with the current date) are added only when booking is enabled"""
+        if not self.booking_enabled:
+            return self.SYSTEM_PROMPT
+        booking = self.BOOKING_PROMPT.format(
+            now=f"{self.calendar_service.now():%A %Y-%m-%d %H:%M}",
+            tz=self.calendar_service.tz_label(),
+            minutes=self.settings.SLOT_MINUTES,
+        )
+        return f"{self.SYSTEM_PROMPT}\n\n{booking}"
+
     async def call_model(self, state: State) -> dict[str, list]:
         """The system propmpt is prepended on every call and NOT stored in the state"""
         reply = await self.llm_with_tools.ainvoke(
-            [SystemMessage(content=self.SYSTEM_PROMPT), *state["messages"]]
+            [SystemMessage(content=self._system_prompt()), *state["messages"]]
         )
         return {"messages": [reply]}
 
@@ -184,29 +223,59 @@ class Agent:
     # ----- public API -------
 
     @staticmethod
-    def _run_args(message: str, thread_id: str) -> tuple[dict, dict]:
+    def _run_args(message: str, thread_id: str, client_id: str, ip: str) -> tuple[dict, dict]:
+        # client_id / ip are read by tools (booking limits); they are set by the server only
         return (
             {"messages": [{"role": "user", "content": message}]},
-            {"configurable": {"thread_id": thread_id}, "recursion_limit": 12},
+            {
+                "configurable": {"thread_id": thread_id, "client_id": client_id, "ip": ip},
+                "recursion_limit": 12,
+            },
         )
 
-    async def ainvoke(self, message: str, thread_id: str) -> str:
-        state_in, config = self._run_args(message, thread_id)
+    async def ainvoke(self, message: str, thread_id: str, client_id: str, ip: str) -> str:
+        state_in, config = self._run_args(message, thread_id, client_id, ip)
         result = await self.graph.ainvoke(state_in, config=config)
         return result["messages"][-1].content
 
     TOOL_LABELS = {
         "search_about_me": "Searching the notes",
         "find_photos": "Looking for photos",
+        "check_availability": "Checking Andriy's calendar",
+        "book_call": "Booking the call",
     }
 
-    async def astream_steps(self, message: str, thread_id: str):
+    @staticmethod
+    def _call_detail(args: dict) -> str:
+        """What to show after the tool label: the search query or the date range."""
+        if args.get("query"):
+            return f': "{args["query"]}"'
+        if args.get("date_from") and args.get("date_to"):
+            return f": {args['date_from']} to {args['date_to']}"
+        return ""
+
+    @staticmethod
+    def _result_step(name: str, text: str) -> str:
+        if name == "find_photos":
+            n = sum(line.startswith("- ") for line in text.splitlines())
+            return f"Found {n} photo(s)" if n else "Nothing found"
+        if name == "check_availability":
+            n = sum(
+                line.count(", ") + 1 for line in text.splitlines() if line.startswith("- ")
+            )
+            return f"Found {n} free slot(s)" if n else "No free slots"
+        if name == "book_call":
+            return "Call booked" if text.startswith("Booked:") else "Could not book the call"
+        n = text.count("[source:")
+        return f"Found {n} note fragment(s)" if n else "Nothing found"
+
+    async def astream_steps(self, message: str, thread_id: str, client_id: str, ip: str):
         """Runs the graph and yields UI events:
         {"type": "step", "text": ...}   the agent is doing something
         {"type": "token", "text": ...}  a piece of the final answer as it is generated
         {"type": "reset"}               discard the tokens sent so far
         {"type": "answer", "answer": ...} the complete final answer."""
-        state_in, config = self._run_args(message, thread_id)
+        state_in, config = self._run_args(message, thread_id, client_id, ip)
         yield {"type": "step", "text": "Understanding your question"}
 
         # stream_mode="updates": one dict {node_name: node_output} per finished node
@@ -245,24 +314,15 @@ class Agent:
                             streamed = False
                         for call in reply.tool_calls:
                             label = self.TOOL_LABELS.get(call["name"], call["name"])
-                            query = call["args"].get("query", "")
-                            yield {"type": "step", "text": f'{label}: "{query}"'}
+                            detail = self._call_detail(call["args"])
+                            yield {"type": "step", "text": f"{label}{detail}"}
                     else:
                         yield {"type": "answer", "answer": reply.content}
 
                 elif node == "tools":
                     for result in output["messages"]:
                         text = result.content if isinstance(result.content, str) else ""
-                        if result.name == "find_photos":
-                            n = sum(line.startswith("- ") for line in text.splitlines())
-                            noun = "photo(s)"
-                        else:
-                            n = text.count("[source:")
-                            noun = "note fragment(s)"
-                        yield {
-                            "type": "step",
-                            "text": f"Found {n} {noun}" if n else "Nothing found",
-                        }
+                        yield {"type": "step", "text": self._result_step(result.name, text)}
                     yield {"type": "step", "text": "Writing the answer"}
 
                 elif node == "refuse":

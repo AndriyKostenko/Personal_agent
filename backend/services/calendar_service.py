@@ -38,6 +38,11 @@ class CalendarService:
     def now(self) -> datetime:
         return datetime.now(self.tz)
 
+    def tz_label(self) -> str:
+        """The current UTC offset as a visitor reads it, e.g. 'UTC-06:00'."""
+        offset = self.now().strftime("%z")  # -0600
+        return f"UTC{offset[:3]}:{offset[3:]}"
+
     # ---- Google API plumbing ----
 
     async def _access_token(self) -> str:

@@ -61,6 +61,13 @@ class UsageService:
                     PRIMARY KEY (client_id, thread_id))"""
             )
             conn.execute(
+                """CREATE TABLE IF NOT EXISTS bookings (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    client_id  TEXT NOT NULL,
+                    ip         TEXT NOT NULL,
+                    created_at REAL NOT NULL)"""
+            )
+            conn.execute(
                 """CREATE TABLE IF NOT EXISTS ips (
                     ip         TEXT PRIMARY KEY,
                     questions  INTEGER NOT NULL DEFAULT 0,
@@ -158,6 +165,39 @@ class UsageService:
                 conn.execute("DELETE FROM chats WHERE client_id = ? AND thread_id = ?", (client_id, thread_id))
             return self._snapshot(conn, client_id)
 
+    def _reserve_booking(self, client_id: str, ip: str) -> int:
+        s = self.settings
+        now = time.time()
+        with self._tx() as conn:
+            def count(where: str, *args) -> int:
+                return conn.execute(f"SELECT COUNT(*) FROM bookings WHERE {where}", args).fetchone()[0]
+
+            if count("client_id = ?", client_id) >= s.MAX_BOOKINGS_PER_USER:
+                raise LimitExceeded(
+                    "booking_limit",
+                    "This visitor has already booked the maximum number of calls.",
+                    {},
+                )
+            if count("ip = ?", ip) >= s.MAX_BOOKINGS_PER_IP:
+                raise LimitExceeded(
+                    "booking_limit", "The booking limit for this network has been reached.", {}
+                )
+            if count("created_at > ?", now - 86400) >= s.MAX_BOOKINGS_PER_DAY:
+                raise LimitExceeded(
+                    "booking_limit",
+                    "Too many calls were booked today. Booking is paused, try again tomorrow.",
+                    {},
+                )
+            cursor = conn.execute(
+                "INSERT INTO bookings (client_id, ip, created_at) VALUES (?, ?, ?)", (client_id, ip, now)
+            )
+            return cursor.lastrowid
+
+    def _release_booking(self, booking_id: int) -> None:
+        """Undo a booking reservation whose event could not be created."""
+        with self._tx() as conn:
+            conn.execute("DELETE FROM bookings WHERE id = ?", (booking_id,))
+
     # ---------- async API ----------
 
     async def get_usage(self, client_id: str) -> dict:
@@ -166,6 +206,13 @@ class UsageService:
     async def reserve(self, client_id: str, ip: str, thread_id: str | None) -> Reservation:
         """Counts a question (and a new chat) or raises LimitExceeded. Call BEFORE the LLM runs."""
         return await asyncio.to_thread(self._reserve, client_id, ip, thread_id)
+
+    async def reserve_booking(self, client_id: str, ip: str) -> int:
+        """Counts a booking or raises LimitExceeded. Call BEFORE creating the event."""
+        return await asyncio.to_thread(self._reserve_booking, client_id, ip)
+
+    async def release_booking(self, booking_id: int) -> None:
+        await asyncio.to_thread(self._release_booking, booking_id)
 
     async def refund(self, client_id: str, ip: str, thread_id: str | None, new_chat: bool) -> dict:
         return await asyncio.to_thread(self._refund, client_id, ip, thread_id, new_chat)

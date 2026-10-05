@@ -71,9 +71,10 @@ async def search_text(data: QueryRequest, vector_service: vector_service_depende
 
 # ───────────── visitors ─────────────
 @router.get("/usage")
-async def get_usage(client: client_dependency, usage_service: usage_dependency):
-    """The visitor's counters: questions and chats used and their limits."""
-    return await usage_service.get_usage(client.client_id)
+async def get_usage(client: client_dependency, usage_service: usage_dependency, agent: agent_dependency):
+    """The visitor's counters (questions and chats used and their limits) and whether booking is on."""
+    usage = await usage_service.get_usage(client.client_id)
+    return {**usage, "booking_enabled": agent.booking_enabled}
 
 
 @router.post("/ask_mentor", response_model=AskResponse)
@@ -126,7 +127,7 @@ async def chat_stream(
         yield _sse({"type": "usage", "usage": reservation.usage})
         answered = False
         try:
-            async for event in agent.astream_steps(data.message, thread_key):
+            async for event in agent.astream_steps(data.message, thread_key, client.client_id, client.ip):
                 answered = answered or event["type"] == "answer"
                 yield _sse(event)
             if not answered:
@@ -159,7 +160,9 @@ async def chat(
     except LimitExceeded as e:
         raise _limit_error(e)
     try:
-        answer = await agent.ainvoke(data.message, f"{client.client_id}:{thread_id}")
+        answer = await agent.ainvoke(
+            data.message, f"{client.client_id}:{thread_id}", client.client_id, client.ip
+        )
         return ChatResponse(answer=answer, usage=reservation.usage)
     except Exception:
         logger.exception("chat failed")

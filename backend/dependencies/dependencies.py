@@ -17,8 +17,8 @@ vectore_store_instance = VectorStoreService(
     collection_name=settings.COLLECTION_NAME, settings=settings
 )
 calendar_instance = CalendarService(settings) if settings.booking_enabled else None
-agent_instance = Agent(settings, vectore_store_instance, calendar_instance)
 usage_instance = UsageService(settings)
+agent_instance = Agent(settings, vectore_store_instance, calendar_instance, usage_instance)
 
 
 def get_agent():

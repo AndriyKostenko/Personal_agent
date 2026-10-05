@@ -55,7 +55,10 @@ class Settings(BaseSettings):
     MIN_NOTICE_HOURS: int = 24
     BOOKING_HORIZON_DAYS: int = 30
     BOOKING_MEET_LINK: bool = True  # attach a Google Meet link to the event
-    MAX_BOOKINGS_PER_USER: int = 1  # not enforced yet (abuse limits are a later step)
+    # booking abuse limits (counted in the usage database, like the question limits)
+    MAX_BOOKINGS_PER_USER: int = 1
+    MAX_BOOKINGS_PER_IP: int = 2
+    MAX_BOOKINGS_PER_DAY: int = 10  # all visitors together, last 24 hours: protects the calendar
 
     @property
     def booking_enabled(self) -> bool:
