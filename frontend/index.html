@@ -4,10 +4,21 @@
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About Andriy</title>
+    <title>AgentAndriy</title>
+    <meta name="application-name" content="AgentAndriy">
+    <meta property="og:site_name" content="AgentAndriy">
+    <meta name="description" content="AgentAndriy is Andriy Kostenko's personal AI assistant: ask about his experience, skills and projects, or book a call with him.">
+    <style>body{margin:0;background:#080808}</style>
   </head>
   <body>
-    <div id="app"></div>
+    <!-- Static content for crawlers and the first paint; Vue replaces it when the app mounts -->
+    <div id="app">
+      <main style="max-width:640px;margin:0 auto;padding:48px 20px;color:#cecece;font-family:system-ui,sans-serif">
+        <h1 style="color:#f2f0ed">AgentAndriy</h1>
+        <p>AgentAndriy is Andriy Kostenko's personal AI assistant. Ask about his experience, skills and projects, or book a call with him.</p>
+        <p><a style="color:#e5571c" href="/privacy">Privacy Policy</a></p>
+      </main>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -447,7 +447,7 @@ const sendQuestion = async (text, shown = text) => {
           <h1>Andriy <span class="ver">v2.0</span></h1>
           <p class="role">SOFTWARE ENGINEER</p>
           <p class="lead">
-            I'm the Personal Andriy's Agent.
+            I'm AgentAndriy, Andriy's personal agent.
           </p>
           <div class="cards">
             <button
@@ -463,6 +463,7 @@ const sendQuestion = async (text, shown = text) => {
               <small>{{ item.hint }}</small>
             </button>
           </div>
+          <p class="legal"><a href="/privacy">Privacy Policy</a></p>
         </section>
 
         <template v-if="!showHero">
@@ -806,6 +807,17 @@ body {
   max-width: 780px;
   margin: 0 auto;
   padding: 24px 20px;
+}
+
+.legal {
+  margin: 20px 0 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-align: center;
+}
+
+.legal a {
+  color: var(--muted);
 }
 
 /* hero (empty state) */
