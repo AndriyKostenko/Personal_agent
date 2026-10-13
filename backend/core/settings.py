@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
@@ -8,9 +9,9 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Obsidian Mentor"
     VERSION: str = "0.1.0"
-    OPENROUTER_API_URL: str 
+    OPENROUTER_API_URL: str
     OBSIDIAN_KNOWLEDGE_BASE_PATH: str = "/Users/andriykostenko/Documents/Obsidian Vault"
-    OPEN_ROUTER_API_KEY: str
+    OPEN_ROUTER_API_KEY: SecretStr
     LOCAL_BASE_URL: str = ""
     QDRANT_STORAGE_PATH: str = "./qdrant_db"
     COLLECTION_NAME: str = "knowledge_base_lc"
@@ -23,7 +24,9 @@ class Settings(BaseSettings):
     MEDIA_BASE_URL: str = "http://127.0.0.1:8000/media"
     VISION_MODEL: str = "openai/gpt-4o-mini"  # любая vision-модель OpenRouter
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
-    PHOTO_FOLDERS: list[str] = ["About me"]  # vault folders with photos not linked from notes
+    PHOTO_FOLDERS: list[str] = [
+        "About me"
+    ]  # vault folders with photos not linked from notes
 
     # ───────────── usage limits (enforced on the server) ─────────────
     MAX_QUESTIONS_PER_USER: int = 10  # questions in total per visitor
@@ -46,7 +49,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REFRESH_TOKEN: str = ""
     CALENDAR_ID: str = "primary"
-    BOOKING_TIMEZONE: str = "Etc/GMT+6"  # IANA name (this is UTC-6, no DST); timezone of the working hours
+    BOOKING_TIMEZONE: str = (
+        "Etc/GMT+6"  # IANA name (this is UTC-6, no DST); timezone of the working hours
+    )
     WORK_DAYS: list[int] = [0, 1, 2, 3, 4]  # Monday = 0
     WORK_START_HOUR: int = 10
     WORK_END_HOUR: int = 18
@@ -58,12 +63,16 @@ class Settings(BaseSettings):
     # booking abuse limits (counted in the usage database, like the question limits)
     MAX_BOOKINGS_PER_USER: int = 1
     MAX_BOOKINGS_PER_IP: int = 2
-    MAX_BOOKINGS_PER_DAY: int = 10  # all visitors together, last 24 hours: protects the calendar
+    MAX_BOOKINGS_PER_DAY: int = (
+        10  # all visitors together, last 24 hours: protects the calendar
+    )
 
     @property
     def booking_enabled(self) -> bool:
         return bool(
-            self.GOOGLE_CLIENT_ID and self.GOOGLE_CLIENT_SECRET and self.GOOGLE_REFRESH_TOKEN
+            self.GOOGLE_CLIENT_ID
+            and self.GOOGLE_CLIENT_SECRET
+            and self.GOOGLE_REFRESH_TOKEN
         )
 
     class Config:
