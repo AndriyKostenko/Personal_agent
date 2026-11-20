@@ -1,0 +1,936 @@
+{
+  "summary": {
+    "collection": "knowledge_base_v2",
+    "n": 28,
+    "rules_pass_rate": 0.917,
+    "faithfulness": 4.16,
+    "relevance": 4.72,
+    "correctness": 4.28,
+    "latency_p50_s": 13.31,
+    "latency_p95_s": 18.81,
+    "avg_tokens": 4538
+  },
+  "results": [
+    {
+      "id": "pg-1",
+      "type": "fact",
+      "question": "What transaction isolation levels does PostgreSQL support and how does it implement isolation?",
+      "answer": "PostgreSQL supports several transaction isolation levels, which are crucial for managing how concurrent transactions interact with each other. Below is a detailed overview of the isolation levels supported by PostgreSQL and how it implements isolation.\n\n## Transaction Isolation Levels Supported by PostgreSQL\n\nPostgreSQL implements the following transaction isolation levels as defined by the SQL standard, with some specific behaviors:\n\n| Level               | Support in PostgreSQL | Prevents                                      |\n|---------------------|-----------------------|-----------------------------------------------|\n| `READ UNCOMMITTED`  | ❌ Not supported. Automatically mapped to `READ COMMITTED` | —                                             |\n| `READ COMMITTED`    | ✅ Default             | Dirty reads                                   |\n| `REPEATABLE READ`   | ✅                     | Dirty reads, Non-repeatable reads, Phantom reads (stricter than standard) |\n| `SERIALIZABLE`      | ✅ (since 9.1 via SSI) | All above + Serialization anomalies           |\n\n### Default Behavior\n- The default isolation level in PostgreSQL is `READ COMMITTED`, which is suitable for most applications.\n- `REPEATABLE READ` is used when it is necessary to ensure that data does not change between queries within a single transaction.\n- `SERIALIZABLE` is for strict consistency requirements but may require implementing retry logic due to potential serialization conflicts.\n\n## Implementation of Isolation\n\nPostgreSQL uses **Multi-Version Concurrency Control (MVCC)** to manage isolation. Here’s how it works:\n\n- Each transaction operates with its own \"snapshot\" of the data. This means that transactions do not block each other when reading data.\n- The isolation level determines how fresh this snapshot is and how strictly PostgreSQL controls conflicts between transactions.\n\n### Mechanisms of Isolation\n- **`READ COMMITTED`**: Each query sees the most recent committed data at the time it starts.\n- **`REPEATABLE READ` and `SERIALIZABLE`**: Transactions work with a consistent snapshot of the data. The `SERIALIZABLE` level includes a serialization anomaly detector (SSI) that can roll back transactions if a conflict is detected.\n\n### Configuration Options\nIsolation levels can be set at various scopes:\n- **Transaction Level**: Using `SET TRANSACTION ISOLATION LEVEL ...` immediately after `BEGIN`.\n- **Session Level**: Using `SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL ...`.\n- **Database or Role Level**: Using `ALTER DATABASE` or `ALTER ROLE` commands.\n- **Global Level**: Configured in `postgresql.conf`.\n\n### Example SQL Commands\nHere are some SQL commands to set isolation levels:\n\n- For a specific transaction:\n  ```sql\n  BEGIN;\n  SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n  -- ... your queries ...\n  COMMIT;\n  ```\n\n- For a session:\n  ```sql\n  SET default_transaction_isolation TO 'serializable';\n  ```\n\n- For a database:\n  ```sql\n  ALTER DATABASE mydb SET default_transaction_isolation TO 'repeatable read';\n  ```\n\n### Important Notes\n- The isolation level must be set as the first command in a transaction.\n- Changing the isolation level after executing any queries in a transaction is not allowed.\n- Long transactions with high isolation levels can increase the load on the undo system, so monitoring and maintenance (like using `VACUUM`) are recommended.\n\nThese details provide a comprehensive understanding of how PostgreSQL handles transaction isolation and the levels it supports.\n\n**Sources:** \n- [PostgreSQL Transaction Isolation Levels](source: Python/Уровни изоляции в Postgress.md)",
+      "tools": [
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/Уровни изоляции в Postgress.md"
+      ],
+      "latency_s": 15.61,
+      "tokens": 5078,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:MVCC": true,
+        "has:Serializable": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer closely follows the context on PostgreSQL’s levels, MVCC snapshots, and SSI. One statement generalizes that transactions do not block each other when reading data, while the context specifically says that reads are not blocked at REPEATABLE READ and SERIALIZABLE.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": [
+          "“Transactions do not block each other when reading data” is broader than the context’s specific statement that REPEATABLE READ and SERIALIZABLE do not block reads."
+        ]
+      }
+    },
+    {
+      "id": "pg-ru",
+      "type": "fact",
+      "question": "Какие уровни изоляции транзакций есть в Postgres?",
+      "answer": "In PostgreSQL, there are four transaction isolation levels defined by the SQL standard, each with specific characteristics and behaviors. Here’s a detailed overview:\n\n### Overview of Transaction Isolation Levels\nTransaction isolation levels determine how concurrent transactions interact with each other and how they see changes made by other transactions. PostgreSQL implements these levels using Multi-Version Concurrency Control (MVCC), allowing each transaction to work with its own snapshot of data.\n\n### Supported Isolation Levels in PostgreSQL\n\n| Level               | Support in PG | Prevents                                      |\n|---------------------|---------------|-----------------------------------------------|\n| `READ UNCOMMITTED`  | ❌ Not supported. Automatically mapped to `READ COMMITTED` | —                                             |\n| `READ COMMITTED`    | ✅ Default     | Dirty reads                                   |\n| `REPEATABLE READ`   | ✅             | Dirty reads, Non-repeatable reads, Phantom reads (stricter in PG than standard) |\n| `SERIALIZABLE`      | ✅ (since 9.1 via SSI) | All above + Serialization anomalies          |\n\n### Characteristics of Each Level\n\n- **READ COMMITTED**: \n  - This is the default isolation level in PostgreSQL.\n  - Each query within a transaction sees only committed changes made before the query starts, preventing dirty reads.\n\n- **REPEATABLE READ**: \n  - Ensures that if a transaction reads a row, it will see the same data if it reads that row again during the same transaction.\n  - Prevents dirty reads, non-repeatable reads, and phantom reads.\n\n- **SERIALIZABLE**: \n  - Provides the highest level of isolation.\n  - Transactions are executed in such a way that they appear to be serialized, preventing all anomalies including serialization anomalies.\n  - It includes a detection mechanism for conflicts (SSI) and may roll back transactions if conflicts are detected.\n\n### Configuring Isolation Levels\nIsolation levels can be set at different scopes in PostgreSQL:\n\n1. **For a single transaction**:\n   ```sql\n   BEGIN;\n   SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n   -- or directly: BEGIN ISOLATION LEVEL REPEATABLE READ;\n   -- ... your queries ...\n   COMMIT;\n   ```\n   Note: `SET TRANSACTION` must be the first command in the transaction.\n\n2. **For the entire session**:\n   ```sql\n   SET default_transaction_isolation TO 'serializable';\n   -- or\n   SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ;\n   ```\n\n3. **At the database or role level**:\n   ```sql\n   ALTER DATABASE mydb SET default_transaction_isolation TO 'repeatable read';\n   ALTER ROLE myuser SET default_transaction_isolation TO 'serializable';\n   ```\n\n4. **Globally in `postgresql.conf`**:\n   ```ini\n   default_transaction_isolation = 'read committed'\n   ```\n   After changing, reload the configuration with `SELECT pg_reload_conf();` or restart the server.\n\n### Important Rules\n- Isolation applies to the transaction, not to individual queries.\n- The isolation level cannot be changed after the first `SELECT`/`INSERT`/`UPDATE` in a transaction.\n- `REPEATABLE READ` and `SERIALIZABLE` do not block reads; locks occur only during modification conflicts or when detecting SSI anomalies.\n- Long transactions with high isolation levels increase the load on the undo system, so it's important to monitor and manage dead tuples.\n\n### Conclusion\nPostgreSQL's transaction isolation levels provide flexibility in managing data consistency and concurrency. The default level, `READ COMMITTED`, is suitable for most tasks, while `REPEATABLE READ` and `SERIALIZABLE` are used for stricter consistency requirements.\n\n**Sources**: Python/Уровни изоляции в Postgress.md",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/Уровни изоляции в Postgress.md"
+      ],
+      "latency_s": 14.59,
+      "tokens": 3384,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:MVCC": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer correctly identifies the isolation levels and reproduces the main PostgreSQL distinctions from the context, including MVCC and the default level. It adds substantial detail beyond the question; most is supported, but the claim that transactions appear to be serialized is not stated in the context. Some SQL comments are also translated rather than matching the context exactly.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": [
+          "“Transactions are executed in such a way that they appear to be serialized” is not stated in the context."
+        ]
+      }
+    },
+    {
+      "id": "js-closure",
+      "type": "fact",
+      "question": "Что такое замыкание в JavaScript?",
+      "answer": "## What is Closure in JavaScript?\n\n**Closure** is one of the most important and powerful concepts in JavaScript. Simply put:\n\n> **A closure is a function that \"remembers\" its outer environment even when it is executed outside that environment.**\n\n### Lexical Scope\n\nIn JavaScript, a function has access to variables declared inside it, as well as to variables declared outside (in the parent function or in the global scope). This is called **lexical scope**.\n\n```javascript\nlet name = \"Ivan\"; // Global variable\n\nfunction sayHello() {\n    console.log(\"Hello, \" + name); // Function sees the variable 'name' from outside\n}\n\nsayHello(); // Outputs: Hello, Ivan\n```\n\n### What is Closure?\n\nA closure occurs when an inner function \"captures\" variables from an outer function and continues to have access to them even after the outer function has finished executing.\n\n**Think of it like a backpack:** When a function is created, it takes with it a \"backpack\" containing all the variables that were available at the time of its creation. Wherever you take this function, the backpack is always with it.\n\n#### Example Code:\n\n```javascript\nfunction createCounter() {\n    let count = 0; // This variable is \"hidden\" inside the function\n\n    return function() {\n        // This anonymous function is the closure\n        count++;\n        return count;\n    };\n}\n\nconst counter = createCounter();\n\nconsole.log(counter()); // 1\nconsole.log(counter()); // 2\nconsole.log(counter()); // 3\n```\n\n**What happened here?**\n\n1. We called `createCounter()`. It created the variable `count` and returned a new function.\n2. The execution of `createCounter()` finished. Normally, variables inside a function should be removed from memory.\n3. However, the function we saved in the variable `counter` **kept a reference** to the variable `count`.\n4. Each time we call `counter()`, it accesses its \"backpack\" (closure), finds `count`, and modifies it.\n\n### Practical Uses of Closures\n\n#### A) Encapsulation (Private Variables)\n\nClosures allow you to hide data from direct modification from the outside.\n\n```javascript\nfunction bankAccount(initialBalance) {\n    let balance = initialBalance; // No one can change balance directly\n\n    return {\n        deposit: function(amount) {\n            balance += amount;\n            console.log(\"Balance after deposit:\", balance);\n        },\n        getBalance: function() {\n            return balance;\n        }\n    };\n}\n\nconst myAcc = bankAccount(100);\nmyAcc.deposit(50); // Balance after deposit: 150\nconsole.log(myAcc.balance); // undefined (variable is not accessible from outside!)\n```\n\n#### B) Function Factories\n\nClosures allow you to create functions with preset parameters.\n\n```javascript\nfunction makeMultiplier(multiplier) {\n    return function(number) {\n        return number * multiplier;\n    };\n}\n\nconst double = makeMultiplier(2); // multiplier = 2 is captured in the closure\nconst triple = makeMultiplier(3); // multiplier = 3 is captured in the closure\n\nconsole.log(double(5)); // 10\nconsole.log(triple(5)); // 15\n```\n\n### Summary\n\nClosures are a fundamental concept in JavaScript that enable powerful programming patterns such as encapsulation and function factories. They allow functions to maintain access to their outer scope, providing flexibility and control over variable access.\n\n**Sources: JavaScript/Замыкание (Closure).md**",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "JavaScript/Call Stack , Task Queu.md",
+        "JavaScript/Замыкание (Closure).md"
+      ],
+      "latency_s": 13.74,
+      "tokens": 3300,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The explanation closely follows the context, but the code examples were translated or reformatted rather than matching the context exactly, and the summary adds a benefit not stated there. The answer is relevant; there are no reference facts to compare against.",
+        "faithfulness": 3,
+        "relevance": 4,
+        "correctness": 3,
+        "unsupported_claims": [
+          "The code examples do not match the context exactly; for example, the lexical-scope example changes «Привет, Иван» to “Hello, Ivan,” and comments and formatting are also changed.",
+          "The summary says closures provide “flexibility and control over variable access,” which is not stated in the context."
+        ]
+      }
+    },
+    {
+      "id": "py-async",
+      "type": "code",
+      "question": "How does async/await work in Python? Show an example from the notes.",
+      "answer": "## How Async/Await Works in Python\n\nIn Python, asynchronous programming is implemented using the `async` and `await` keywords, which allow for non-blocking code execution. Here's a detailed explanation based on the notes.\n\n### Key Concepts\n\n- **Asynchronous Function Definition**: Use `async def` to define an asynchronous function.\n- **Awaiting Results**: Use `await` to wait for the result of an asynchronous operation.\n- **Event Loop**: The built-in `asyncio` library manages the event loop for asynchronous operations.\n- **Running Asynchronous Programs**: Use `asyncio.run()` to start an asynchronous program.\n\n### How It Works\n\nWhen Python encounters `await some_func()`, it performs the following steps:\n\n1. **Executes** `some_func()` (if it is a coroutine).\n2. **Pauses** the current function until `some_func()` completes.\n3. **Does not block** the entire thread; the event loop can switch to other tasks if `some_func()` is waiting (e.g., for network responses).\n\n### Important Notes\n\n- `await some_func()` does **not delay** the call to `some_func()`. Instead, it executes `some_func()` immediately and waits for its completion without blocking if there are await points inside.\n- Tasks do not execute one after another; they run concurrently within a single thread.\n\n### Example of Async/Await\n\nHere is a visual representation of how the event loop manages tasks:\n\n```\nEvent Loop (cycle of events)\n│\n├── Task A: await sleep(2) → scheduled: resume at 00:00:02\n├── Task B: await sleep(1) → scheduled: resume at 00:00:01\n├── Task C: await sleep(3) → scheduled: resume at 00:00:03\n│\n▼\n1 second passed:  →  B ready → executing\n2 seconds passed:  →  A ready → executing\n3 seconds passed:  →  C ready → executing\n```\n\n### Summary of Behavior\n\n| Situation | What `await some_func()` Does |\n|-----------|-------------------------------|\n| `some_func()` is asynchronous and contains `await` | Executes `some_func()`, pauses the current function, and allows the event loop to switch to other tasks. |\n| `some_func()` is asynchronous but has no `await` inside | Executes synchronously, blocking the event loop until it finishes. |\n| `some_func()` is not called with `await` | Returns a coroutine object, but it does not start (and will issue a warning). |\n\n### Under the Hood\n\nAsynchronous programming in Python relies on an event loop:\n\n1. `asyncio.run(main())` is called to start the process.\n2. An **event loop** is created.\n3. When `await` is encountered, Python pauses the current task and switches to another.\n4. Once the awaited operation (like a network call) completes, the task resumes.\n\nThis mechanism is not multithreading but rather uses coroutines managed within a single thread, allowing for efficient context switching.\n\n---\n\n**Sources**: Python/Async in Python.md",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/Async in Python.md"
+      ],
+      "latency_s": 15.91,
+      "tokens": 3066,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:await": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer accurately paraphrases the notes on `await`, the event loop, concurrency, and the coroutine cases. Its event-loop schedule is a translated version of the visual example in the context, so it addresses the request for an example from the notes.",
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": []
+      }
+    },
+    {
+      "id": "go-slices",
+      "type": "fact",
+      "question": "How do slices work in Go?",
+      "answer": "In Go, slices are a flexible and powerful way to work with sequences of data. Here’s a detailed overview of how slices work based on the information available.\n\n## Overview of Slices\n- Slices are built on top of arrays and provide a more dynamic way to handle collections of data.\n- They are more commonly used than arrays in Go due to their flexibility and ease of use.\n\n## Creating Slices\nThere are four primary ways to create slices in Go:\n\n1. **Using Slice Literals**\n   - This is the most common and readable way when initial values are known.\n   ```go\n   nums := []int{1, 2, 3, 4, 5}\n   emptySlice := []string{} // A non-nil empty slice\n   ```\n\n2. **Using the `make` Function**\n   - This method is used when you want to allocate memory in advance to optimize performance.\n   ```go\n   users := make([]string, 0, 100) // Length 0, capacity 100\n   buffer := make([]byte, 10) // Slice of length 10 initialized with zero values\n   ```\n\n3. **Declaring a Nil Slice**\n   - A nil slice is declared without allocating memory until needed.\n   ```go\n   var data []int // len=0, cap=0, data == nil\n   data = append(data, 42) // Memory allocated on first append\n   ```\n\n4. **Slicing an Array or Another Slice**\n   - This creates a new slice that references the memory of an existing array or slice.\n   ```go\n   arr := [5]int{10, 20, 30, 40, 50}\n   slice := arr[1:4] // This slice references [20, 30, 40]\n   ```\n\n## Characteristics of Slices\n- **Dynamic Size**: Unlike arrays, slices can grow and shrink in size using the `append` function.\n- **Underlying Array**: Slices are backed by an underlying array, and when you create a slice, you are essentially creating a reference to that array.\n- **Passing to Functions**: When slices are passed to functions, a copy of the slice header is made (which includes a pointer to the underlying array, length, and capacity). However, the underlying array is not copied, allowing for efficient data manipulation.\n\n## Important Considerations\n- **Appending Elements**: When using `append`, if the underlying array is full, a new array is allocated, and the slice header is updated to point to this new array.\n   ```go\n   func addElement(s []int) {\n       s = append(s, 4) // Modifies local copy of the slice header\n   }\n   ```\n\n- **Choosing Between Slices and Arrays**: Slices are generally preferred over arrays due to their dynamic nature and ease of use. Arrays are used in specific cases where fixed size and memory control are necessary.\n\n## Summary\nSlices in Go provide a powerful and flexible way to manage collections of data, allowing for dynamic resizing and efficient memory usage. They are the standard data structure for handling sequences in Go programming.\n\n**Sources**: Golang/Slices in golang.md, Golang/Data types.md, Golang/Golang variables.md",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Golang/Data types.md",
+        "Golang/Golang variables.md",
+        "Golang/Slices in golang.md"
+      ],
+      "latency_s": 17.03,
+      "tokens": 4119,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer mostly restates the supplied notes, including the four creation methods, the slice header, and append behavior. It overstates append as a way to shrink slices and describes slices broadly as references, which is not supported as stated by the context.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 3,
+        "unsupported_claims": [
+          "Slices can shrink in size using append.",
+          "When you create a slice, you are essentially creating a reference to the underlying array; the context says slices use a header with a pointer to an underlying array and explicitly notes that Go does not define reference types.",
+          "Slices enable efficient data manipulation and efficient memory usage, stated as general guarantees beyond the specific efficiency points in the context."
+        ]
+      }
+    },
+    {
+      "id": "inherit",
+      "type": "fact",
+      "question": "How does inheritance differ between JavaScript and Python?",
+      "answer": "Inheritance in JavaScript and Python differs significantly in terms of mechanisms and structures. Below is a detailed comparison based on the notes.\n\n## JavaScript Inheritance\n\n- **Mechanism**: JavaScript uses **delegation** between **objects** rather than a classical inheritance model.\n- **Prototype Chain**:\n  - Each instance has a hidden property `Prototype` (accessible as `__proto__`) that points to another object.\n  - The `Child.prototype` is the object referenced by the instance's `__proto__`, containing methods shared among all instances of `Child`.\n  - If a property is not found in the instance, JavaScript traverses the prototype chain: `__proto__` → `Child.prototype` → `Parent.prototype` → `Object.prototype`.\n  - The end of the chain is indicated by `Object.prototype.__proto__` being **`null**.\n  \n- **Example Code**:\n  ```javascript\n  class Parent {}\n  class Child extends Parent {}\n  const instance = new Child();\n\n  console.log(instance.__proto__ === Child.prototype);       // true\n  console.log(Child.prototype.__proto__ === Parent.prototype); // true\n  console.log(Parent.prototype.__proto__ === Object.prototype); // true\n  console.log(Object.prototype.__proto__ === null);          // true\n  ```\n\n## Python Inheritance\n\n- **Mechanism**: Python employs a **class hierarchy** for inheritance.\n- **Class Reference**:\n  - Each instance refers to its class through the `__class__` attribute (or the `type()` function).\n  - The `Class Child` maintains a list of base classes in the `__bases__` attribute.\n  - In Python 3, `object` is the base class for all new classes, with an empty `__bases__`.\n  \n- **Method Resolution Order (MRO)**:\n  - Python does not simply traverse \"up\" the chain; it constructs a linear order for method resolution (using the C3 algorithm) to handle multiple inheritance correctly.\n  - The order can be viewed using `ClassName.mro()`.\n\n- **Example Code**:\n  ```python\n  class Parent: pass\n  class Child(Parent): pass\n\n  instance = Child()\n\n  print(instance.__class__ is Child)          # True\n  print(Child.__bases__ == (Parent,))         # True\n  print(Parent.__bases__ == (object,))        # True\n  print(Child.mro())                          # [<class '__main__.Child'>, <class '__main__.Parent'>, <class 'object'>]\n  ```\n\n## Key Differences\n\n| Characteristic         | JavaScript                          | Python                               |\n|------------------------|-------------------------------------|--------------------------------------|\n| **Mechanism**          | Delegation between **objects**      | Hierarchy of **classes**             |\n| **Reference**          | `instance.__proto__` → prototype object | `instance.__class__` → class        |\n| **Method Lookup**      | Dynamic traversal of the prototype chain | Precomputed list (MRO)              |\n| **End of Chain**       | `null`                              | `object` (which has no bases)       |\n\n### Visual Representation\n\nHere is a textual representation of how inheritance works in both languages:\n\n```mermaid\ngraph TD\n    subgraph JavaScript\n        direction TB\n        JS_Inst[instance] -->|__proto__| JS_ChildP[Child.prototype]\n        JS_ChildP -->|__proto__| JS_ParentP[Parent.prototype]\n        JS_ParentP -->|__proto__| JS_ObjP[Object.prototype]\n        JS_ObjP -->|__proto__| JS_Null((null))\n    end\n\n    subgraph Python\n        direction TB\n        PY_Inst[instance] -->|__class__| PY_Child[Class Child]\n        PY_Child -->|__bases__| PY_Parent[Class Parent]\n        PY_Parent -->|__bases__| PY_Obj[Class object]\n        PY_Obj -->|no bases| PY_End(( ))\n        \n        PY_MRO[MRO: Child → Parent → object] -.-> PY_Child\n    end\n\n    style JS_Null fill:#f9f9f9,stroke:#333,stroke-dasharray: 5 5\n    style PY_End fill:#f9f9f9,stroke:#333,stroke-dasharray: 5 5\n```\n\nThis comparison highlights the fundamental differences in how inheritance is structured and operates in JavaScript and Python.\n\n**Sources**: JavaScript/Cравнение механизмов наследования в JavaScript и Python.md, Python/Cравнение механизмов наследования в JavaScript и Python.md",
+      "tools": [
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "JavaScript/Cравнение механизмов наследования в JavaScript и Python.md",
+        "Python/Cравнение механизмов наследования в JavaScript и Python.md",
+        "Python/Popular Design Patterns.md"
+      ],
+      "latency_s": 18.81,
+      "tokens": 6052,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:prototype": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer accurately compares the mechanisms and method lookup described in the context, and its JavaScript and Python examples match. The Mermaid diagram changes the context’s literal label `нет баз` to `no bases`, so the diagram code is not an exact match.",
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 4,
+        "unsupported_claims": [
+          "The Mermaid diagram uses `no bases` where the context’s code uses `нет баз`; the meaning is supported, but the code does not match exactly."
+        ]
+      }
+    },
+    {
+      "id": "py-broad",
+      "type": "broad",
+      "question": "What does Andriy know about Python?",
+      "answer": "Andriy has knowledge about Python that encompasses various aspects, including its execution process, asynchronous programming, memory management, and design patterns. Below is a structured overview of what he knows about Python:\n\n## Python Code Execution Process\n- **Stages of Execution**:\n  1. **Lexical Analysis + Syntax Parsing**: The source code is analyzed and transformed into an Abstract Syntax Tree (AST).\n  2. **Compilation**: The AST is compiled into bytecode, which is cached in `__pycache__/*.pyc`.\n  3. **Python Virtual Machine (PVM)**: The bytecode is executed step-by-step by the PVM.\n  4. **Interaction with OS/Hardware**: This includes output, file reading, and calls to C libraries.\n\n- **Execution Order**: Python executes code strictly from top to bottom, with specific rules for when different constructs are executed:\n  - Assignments, function calls, `print`, and `import` are executed immediately.\n  - Function and class definitions create objects but do not execute their bodies until called.\n\n## Asynchronous Programming\n- **Key Concepts**:\n  - **`async def`**: Defines an asynchronous function.\n  - **`await`**: Waits for the result of an asynchronous operation.\n  - **`asyncio`**: A built-in library for asynchronous programming.\n  - **`asyncio.run()`**: Starts an asynchronous program.\n\n- **Benefits**: Asynchronous programming in Python allows for the execution of multiple operations simultaneously, making it efficient for I/O-bound tasks.\n\n## Memory Management\n- **Memory Layers**:\n  1. **Python Object Layer**: Objects live in the heap, managed by `pymalloc`.\n  2. **Namespaces**: Variable names are stored in dictionaries that also reside in the heap.\n  3. **Stack**: Used for C function calls and storing call frames, but frames are allocated in the heap.\n\n- **Garbage Collection**: Python uses reference counting and periodic garbage collection to manage memory.\n\n## Design Patterns\n- Andriy is familiar with popular design patterns used in Python, although specific patterns were not detailed in the notes.\n\n## Multithreading and Multiprocessing\n- **Global Interpreter Lock (GIL)**: In CPython, only one thread can execute Python bytecode at a time, which affects performance in multi-threaded applications.\n- **Threading**: Suitable for I/O-bound tasks.\n- **Multiprocessing**: Suitable for CPU-bound tasks, allowing full utilization of multiple CPU cores.\n\n## Event Loop\n- The event loop is a powerful tool for creating efficient asynchronous applications in Python. It is particularly useful for network I/O and high-load servers but not suitable for CPU-intensive tasks.\n\n## Testing Frameworks\n- Andriy knows about two main testing frameworks in Python: `unittest` and `pytest`, which support mocking, state preparation, and dependency isolation.\n\n### Code Examples\nHere are some relevant code snippets Andriy has noted:\n\n**Asynchronous Web Request Example**:\n```python\nimport asyncio\nimport aiohttp\n\nasync def fetch_url(session, url):\n    async with session.get(url) as response:\n        print(f\"Received: {response.status} from {url}\")\n        return await response.text()\n\nasync def main():\n    urls = [\n        \"https://httpbin.org/delay/1\",\n        \"https://httpbin.org/delay/2\",\n        \"https://httpbin.org/json\"\n    ]\n\n    async with aiohttp.ClientSession() as session:\n        tasks = [fetch_url(session, url) for url in urls]\n        results = await asyncio.gather(*tasks)\n        print(f\"Received {len(results)} responses\")\n\nasyncio.run(main())\n```\n\n**Multiprocessing Example**:\n```python\nfrom multiprocessing import Process\nimport os\n\ndef heavy_calc(n):\n    print(f\"Process {os.getpid()} calculating {n}\")\n    sum = 0\n    for i in range(10_000_000):\n        sum += i\n    return sum\n\nif __name__ == '__main__':\n    processes = []\n    for i in range(4):\n        p = Process(target=heavy_calc, args=(i,))\n        p.start()\n        processes.append(p)\n\n    for p in processes:\n        p.join()\n```\n\n### Sources:\n- Python/Этапы выполнения Python-кода.md\n- Python/Async in Python.md\n- Python/Python Memory Management.md\n- Python/Multithreading & Multiprocessing.md\n- Python/Testing in python.md\n- Python/Popular Design Patterns.md\n- Python/Event-loop.md",
+      "tools": [
+        "search_about_me",
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/Async in Python.md",
+        "Python/Event-loop.md",
+        "Python/Multithreading & Multiprocessing.md",
+        "Python/Popular Design Patterns.md",
+        "Python/Python Memory Data Storage.md",
+        "Python/Python Memory Management.md",
+        "Python/Testing in python.md",
+        "Python/Этапы выполнения Python-кода.md"
+      ],
+      "latency_s": 21.16,
+      "tokens": 6270,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "Most of the summary is supported by the notes. However, the claim that Andriy is familiar with design patterns goes beyond the context, and the code examples do not match the context exactly: their printed messages were translated.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 3,
+        "unsupported_claims": [
+          "The notes establish that Andriy is familiar with popular design patterns; they only introduce popular design patterns in Python without naming any or establishing his familiarity.",
+          "The code examples change the context's printed strings: the async example uses “Received...” instead of “Получено...”, and the multiprocessing example uses “Process ... calculating ...” instead of “Процесс ... считает ...”."
+        ]
+      }
+    },
+    {
+      "id": "about-1",
+      "type": "fact",
+      "question": "Who is Andriy?",
+      "answer": "Andriy is a 32-year-old software engineer originally from Kherson, Ukraine. He has a diverse background and a range of interests and experiences. Here are some key details about him:\n\n### Personal Life\n- **Father**: He has a son named William.\n- **Pet Owner**: He owns a Shiba Inu dog.\n\n### Professional Background\n- **Military Experience**: He served as a Marine Officer.\n- **Current Role**: He is currently working as a Software Engineer.\n\n### Education\n- **Web Development**: Completed a program at Beetroot Academy in Ukraine.\n- **Civil Engineering**: Holds a Master's degree from Kherson State Maritime Academy with a GPA of 4.0.\n\n### Hobbies\n- **Sports**: He has been playing basketball for over 10 years, starting at the age of 8. He also enjoys going to the gym and playing table tennis.\n\n### Notable Achievements\n- **Presentations**: \n  - Delivered a talk titled \"The Dark Side of Python\" at an IT community event in Calgary, discussing advanced Python topics.\n  - Shared insights on competing in AI hackathons, emphasizing the importance of execution and simplicity over perfection.\n\n### Online Presence\n- **CodeWars Profile**: He has a profile on CodeWars where he engages in coding challenges. [CodeWars Profile](https://www.codewars.com/users/Andriy_Kostenko/badges/small)\n\nThis summary provides an overview of Andriy's background, interests, and professional journey. \n\n**Sources**: About myself.",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "About me/About myself.md",
+        "Python/LangChain & LangGraph/LangChain & LangGraph.md",
+        "Python/Live Coding Info Helpers.md",
+        "Python/Popular Design Patterns.md"
+      ],
+      "latency_s": 7.54,
+      "tokens": 3845,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer gives a relevant summary and most details are supported by the notes. It slightly overstates what the CodeWars link indicates and generalizes the single AI hackathon story to multiple hackathons. The reference facts are empty, so correctness receives the neutral score.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 3,
+        "unsupported_claims": [
+          "He engages in coding challenges; the notes provide a CodeWars profile link but do not say he engages in challenges.",
+          "The phrasing “AI hackathons” suggests multiple hackathons, while the notes describe a success story about one AI hackathon."
+        ]
+      }
+    },
+    {
+      "id": "hackathon",
+      "type": "fact",
+      "question": "Did Andriy win any hackathons?",
+      "answer": "Yes, Andriy has won an AI hackathon. He shared the strategy he used to achieve this victory in a talk titled \"How to Win an AI Hackathon in 48 Hours.\" In this session, he discussed various aspects of hackathons, including:\n\n### Key Points from Andriy's Talk\n- **Winning Mindset**: He emphasized the importance of a strategic approach to hackathons.\n- **Tech Stack**: He recommended using FastAPI, React/Next.js, and modern AI models for building prototypes quickly.\n- **Execution Plan**: Andriy provided a realistic timeline for transforming an idea into a working demo within 48 hours.\n- **MVP Development**: He highlighted that having one impressive feature is more valuable than a large, unfinished product.\n- **Demo Strategy**: He shared tips on designing presentations that impress judges.\n\nThis information indicates that Andriy has practical experience and insights into winning hackathons, specifically in the context of AI projects.\n\nSources: Others/How to Win an AI Hackathon in 48 Hours.md",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Others/How to Win an AI Hackathon in 48 Hours.md"
+      ],
+      "latency_s": 6.35,
+      "tokens": 2339,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The context explicitly says Andriy shared the strategy he used to win an AI hackathon, and the listed talk topics support the answer’s summary. The reference facts are empty, so correctness receives the neutral score.",
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 3,
+        "unsupported_claims": []
+      }
+    },
+    {
+      "id": "photo-1",
+      "type": "photo",
+      "question": "Show me a photo from the AI hackathon",
+      "answer": "Here are two photos related to the AI hackathon:\n\n1. ![Andriy presenting at the AI hackathon](http://127.0.0.1:8000/media/a7c20ea145483da0.jpeg)\n   - This photo shows Andriy seated at a table with a laptop, presenting on how to win an AI hackathon in 48 hours. A large screen displays the presentation, featuring programming languages and tools like Python, JavaScript, and FastAPI.\n\n2. ![Winners of the Full-Stack Hackathon](http://127.0.0.1:8000/media/04be249ae03a96b5.jpeg)\n   - This image displays the winners of a Full-Stack Hackathon, highlighting the Grand Prize winner, runner-ups, and category winners. Andriy Kostenko is recognized as a runner-up alongside Travis Geislinger.",
+      "tools": [
+        "find_photos"
+      ],
+      "retrieved": [],
+      "latency_s": 5.97,
+      "tokens": 1547,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "called_find_photos": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The first image and its description are supported by the context and directly answer the question. The second image is described as a Full-Stack Hackathon photo, but the context does not connect it to the AI hackathon.",
+        "faithfulness": 4,
+        "relevance": 4,
+        "correctness": 3,
+        "unsupported_claims": [
+          "The claim that the Full-Stack Hackathon photo is related to the AI hackathon."
+        ]
+      }
+    },
+    {
+      "id": "oos-weather",
+      "type": "out_of_scope",
+      "question": "What's the weather in Kyiv today?",
+      "answer": "I can only answer questions about Andriy and his notes.",
+      "tools": [],
+      "retrieved": [],
+      "latency_s": 0.73,
+      "tokens": 0,
+      "checks": {
+        "refused": true,
+        "no_tools": true
+      },
+      "verdict": null
+    },
+    {
+      "id": "oos-code",
+      "type": "out_of_scope",
+      "question": "Write me a quicksort in Rust",
+      "answer": "I can only answer questions about Andriy and his notes.",
+      "tools": [],
+      "retrieved": [],
+      "latency_s": 0.65,
+      "tokens": 0,
+      "checks": {
+        "refused": true,
+        "no_tools": true
+      },
+      "verdict": null
+    },
+    {
+      "id": "noinfo-k8s",
+      "type": "no_answer",
+      "question": "What does Andriy know about Kubernetes?",
+      "answer": "Andriy has some knowledge and experience related to Kubernetes, particularly in the context of containerization and deployment. Here are the details:\n\n### General Knowledge\n- Andriy is familiar with containerization, which is a key aspect of Kubernetes. He has engaged with developers interested in modern development workflows that include containerization.\n\n### Tools and Technologies\n- He has experience with Docker, which is often used in conjunction with Kubernetes for containerization and deployment of applications.\n- Andriy uses `k9s`, a Kubernetes CLI tool, indicating familiarity with managing Kubernetes clusters.\n\n### Deployment Experience\n- He has containerized and deployed backend services using Docker and AWS EC2, which suggests he understands the deployment processes that Kubernetes can facilitate.\n\n### Related Skills\n- His background includes working with CI/CD workflows, which are often integrated with Kubernetes for automated deployment processes.\n\nThe notes do not provide extensive details specifically about Kubernetes architecture or advanced features. For more in-depth knowledge, further information would be needed.\n\n**Sources:** \n- About myself\n- Others/How to Win an AI Hackathon in 48 Hours",
+      "tools": [
+        "search_about_me",
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "About me/About myself.md",
+        "Golang/What are goroutines?.md",
+        "JavaScript/Call Stack , Task Queu.md",
+        "Others/How to Win an AI Hackathon in 48 Hours.md",
+        "Others/OpenFang.md",
+        "Python/CPython Internals.md",
+        "Python/LangChain & LangGraph/LangChain & LangGraph.md",
+        "TUI installed/TUI installed on myMac.md.md"
+      ],
+      "latency_s": 8.44,
+      "tokens": 8894,
+      "checks": {
+        "not_refused": true,
+        "no_invented_urls": true,
+        "english": true,
+        "admits_no_info": false
+      },
+      "verdict": null
+    },
+    {
+      "id": "gen-0",
+      "type": "fact",
+      "question": "Как выбрать способ создания слайса в Go в зависимости от того, как будут добавляться или задаваться его элементы?",
+      "answer": "In Go, the method of creating a slice depends on how elements will be added or assigned. Here are the main ways to create slices and guidelines for choosing the appropriate method based on your needs:\n\n## Methods of Creating Slices\n\n1. **Using Slice Literals (when data is known in advance)**\n   - This is the most common and readable way to create a slice if the initial elements are already defined.\n   ```go\n   // Slice with initial values\n   nums := []int{1, 2, 3, 4, 5}\n\n   // Empty slice (not nil, points to an empty base array)\n   emptySlice := []string{}\n   ```\n\n2. **Using the `make` Function (for dynamic data and optimization)**\n   - This method is used when you need to allocate memory in advance to avoid costly reallocations when adding elements via `append`.\n   ```go\n   // make([]Type, length, capacity)\n// Length 0, but memory allocated for 100 elements:\n   users := make([]string, 0, 100)\n\n// Slice with length 10 (immediately filled with \"zero\" values of the type, here - zeros):\n   buffer := make([]byte, 10)\n   ```\n\n3. **Declaring a Nil Slice (lazy initialization)**\n   - This is the idiomatic Go style for creating a slice that currently contains no elements and does not require memory allocation right now. The `append` function works safely with nil slices.\n   ```go\n   var data []int // len=0, cap=0, data == nil\n\n   // Memory will be allocated under the hood only on the first call to append:\n   data = append(data, 42)\n   ```\n\n4. **Slicing an Array or Another Slice**\n   - This creates a new slice that refers to the memory of an already existing array or slice.\n   ```go\n   arr := [5]int{10, 20, 30, 40, 50} // This is an array\n   slice := arr[1:4]                 // This is a slice: [20, 30, 40]\n   ```\n\n## Guidelines for Choosing a Method\n\n- **Use `var s []int`** if the slice will be built element by element but may remain empty.\n- **Use `s := make([]int, 0, N)`** if you plan to add `N` elements in a loop (this significantly speeds up the code).\n- **Use `s := []int{1, 2}`** if the values are fixed at the time of writing the code.\n\nIn 99% of cases, it is preferable to create **slices**. In Go, slices are the de facto standard, while arrays are more of a low-level tool used for very specific tasks.\n\n## Adding Elements to Slices\n\nWhen adding elements to a slice, you can use the `append` function. However, it's important to note that:\n\n- If you pass a slice to a function and modify it using `append`, the original slice will not see the changes unless you return the modified slice and reassign it.\n  \nExample of returning and reassigning:\n```go\npackage main\n\nimport \"fmt\"\n\n// Function returns the updated slice\nfunc addElement(s []int, val int) []int {\n    s = append(s, val)\n    return s\n}\n\nfunc main() {\n    nums := []int{1, 2, 3}\n    \n    // Reassign the original variable with the new value\n    nums = addElement(nums, 4)\n    \n    fmt.Println(nums) // Output: [1 2 3 4]\n}\n```\n\nThis approach avoids side effects and makes the code more predictable and safe for concurrent execution.\n\n### Summary\n- Choose the slice creation method based on whether you know the data in advance or need to allocate memory dynamically.\n- Use `append` carefully, and remember to return the modified slice if you want to reflect changes outside the function.\n\n**Sources:** Golang/Slices in golang.md, Golang/Data types.md",
+      "tools": [
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Golang/Data types.md",
+        "Golang/Slices in golang.md",
+        "JavaScript/React + TypeScript notes.md"
+      ],
+      "latency_s": 17.86,
+      "tokens": 6851,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:var s []int": true,
+        "has:s := make([]int, 0, N)": true,
+        "has:s := []int{1, 2}": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "Ответ охватывает правила выбора между nil-слайсом, make и литералом, а также приводит дополнительные способы создания и пояснение про append. Факты и примеры соответствуют контексту; ответ дан по-английски, хотя вопрос задан по-русски.",
+        "faithfulness": 5,
+        "relevance": 4,
+        "correctness": 5,
+        "unsupported_claims": []
+      }
+    },
+    {
+      "id": "gen-1",
+      "type": "fact",
+      "question": "How does the FastAPI example keep track of refresh tokens so they can be revoked?",
+      "answer": "The FastAPI example manages refresh tokens and their revocation through a structured approach involving token rotation and a storage mechanism. Here’s a detailed breakdown of how it works:\n\n### Refresh Token Management\n\n1. **Token Creation**:\n   - When a user logs in, a refresh token is created using the `create_refresh_token` function. This function generates a unique identifier (`jti`) for the token and stores its metadata in a dictionary (`refresh_token_store`), which simulates a database.\n   - The metadata includes:\n     - `user_id`: The ID of the user associated with the token.\n     - `exp`: The expiration time of the token.\n     - `revoked`: A flag indicating whether the token has been revoked.\n\n   ```python\n   def create_refresh_token(user_id: str) -> str:\n       jti = secrets.token_hex(16)  # unique token ID\n       expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)\n       payload = {\"sub\": user_id, \"jti\": jti, \"exp\": expire, \"iat\": datetime.now(timezone.utc), \"type\": \"refresh\"}\n       token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)\n       \n       # Save metadata for revocation\n       refresh_token_store[jti] = {\"user_id\": user_id, \"exp\": expire, \"revoked\": False}\n       return token\n   ```\n\n2. **Token Rotation**:\n   - When a refresh token is used to obtain a new access token, the old refresh token is marked as revoked. This is done in the `/auth/refresh` endpoint, where the server checks if the token is valid and not revoked before issuing a new one.\n\n   ```python\n   new_access = create_access_token(payload[\"sub\"])\n   new_refresh = create_refresh_token(payload[\"sub\"])\n   refresh_token_store[jti][\"revoked\"] = True\n   ```\n\n3. **Revocation**:\n   - The `/auth/logout` endpoint allows users to log out, which revokes the refresh token by setting its `revoked` flag to `True`. This prevents further use of the token.\n\n   ```python\n   if jti in refresh_token_store:\n       refresh_token_store[jti][\"revoked\"] = True\n   ```\n\n### Security Considerations\n\n- **Storage**: In production, it is recommended to replace the in-memory dictionary with a more robust storage solution like Redis or PostgreSQL to ensure persistence and scalability.\n- **Token Expiration**: Access tokens have a short lifespan (5-30 minutes), while refresh tokens can last for days or weeks, allowing users to obtain new access tokens without re-authentication.\n- **HttpOnly Cookies**: Refresh tokens are sent as HttpOnly cookies to protect them from JavaScript access, mitigating XSS attacks.\n\n### Summary\n\nThe FastAPI example effectively manages refresh tokens by implementing token rotation and revocation mechanisms, ensuring that tokens can be securely tracked and invalidated when necessary. This approach enhances security and user experience by allowing seamless session management.\n\n**Sources**: Python/Refresh token.md",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/Refresh token.md"
+      ],
+      "latency_s": 13.31,
+      "tokens": 4345,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:jti": true,
+        "has:refresh_token_store": true,
+        "has:revoked": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer explains the jti-keyed store and revoked flag, including revocation during rotation and logout, which matches the context. Some production rationale is added, and the reproduced code comments are not exact copies of the context.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": [
+          "That replacing the in-memory dictionary with Redis or PostgreSQL ensures persistence and scalability; the context recommends those stores but does not give that rationale.",
+          "The code comments in the reproduced snippet are not exact matches to the context (they are rewritten in English)."
+        ]
+      }
+    },
+    {
+      "id": "gen-2",
+      "type": "fact",
+      "question": "Как связаны метакласс, класс и экземпляр при выполнении `x = MyClass()`?",
+      "answer": "When executing `x = MyClass()`, the relationship between the metaclass, class, and instance can be understood through the following points:\n\n### Metaclass\n- The default metaclass in Python is `type`. It is an object of type `PyTypeObject` that exists when Python starts.\n- The process of creating a class involves the metaclass:\n  1. Python collects the class body into a `namespace` dictionary.\n  2. It calls `type.__new__()`.\n  3. Memory is allocated for a new `PyTypeObject`, which represents the class.\n\n### Class\n- A class, such as `MyClass`, is also an object (an instance of the metaclass `type`).\n- The class object resides in memory and contains:\n  - Class attributes (e.g., `val`).\n  - Methods and references to base classes.\n- The class itself has a reference to its metaclass through its `ob_type`.\n\n### Instance\n- When `x = MyClass()` is executed, an instance of `MyClass` is created.\n- The instance is an object that also resides in memory and contains:\n  - A header that includes a reference to the class (`MyClass`) and a reference count.\n  - An instance dictionary (`x.__dict__`) where instance-specific attributes are stored.\n- The instance has its own `ob_type` that points to `MyClass`.\n\n### Summary of the Creation Process\n1. **Existence of Metaclass**: The metaclass `type` exists.\n2. **Class Creation**: A new class object (`MyClass`) is created, which is also an object in memory.\n3. **Instance Creation**: An instance of `MyClass` is created.\n4. **Variable Binding**: The variable `x` is bound to the instance in the global namespace.\n\n### Visual Representation\nThe following diagram summarizes the relationships:\n\n```text\n[ Metaclass type ]              [ New Class MyClass ] (PyTypeObject)\n+-------------------+           +-------------------------------------+\n| PyObject_HEAD     |           | PyObject_HEAD                       |\n|  ob_type --------->---------->|  ob_type ------------------------+  |\n+-------------------+           +---------------------------------+ |  |\n| tp_new (function)  |           | | tp_name = \"MyClass\"           | |  |\n| tp_init (function) |           | | tp_bases = (object,)          | |  |\n+-------------------+           | | tp_dict = {'method': func}    | |  |\n      |                         | | tp_new = ...                  | |  |\n      | (calls __new__)        | +---------------------------------+  |\n      +------------------------>+                                    |\n                                +-------------------------------------+\n                                ^ \n                                |\n                  (ob_type of MyClass points to type)\n```\n\n### Key Takeaways\n- An instance knows about its class through `ob_type`.\n- The class knows about its metaclass through `ob_type`.\n- The metaclass knows about itself (`type` -> `type`).\n\nThis structure illustrates the hierarchy and relationships between metaclasses, classes, and instances in Python.\n\n**Sources**: \n- Python/Creation of the new object in Python.md\n- Python/Python Memory Data Storage.md",
+      "tools": [
+        "search_about_me",
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Golang/Data types.md",
+        "JavaScript/Call Stack , Task Queu.md",
+        "Programming/Design Patterns in Different Prog. Lang..md",
+        "Python/Creation of the new object in Python.md",
+        "Python/Live Coding Info Helpers.md",
+        "Python/Popular Design Patterns.md",
+        "Python/Python Memory Data Storage.md"
+      ],
+      "latency_s": 14.55,
+      "tokens": 7353,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:type": true,
+        "has:MyClass.__call__": false,
+        "has:PyObject: instance": false,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer mostly follows the context’s type chain and describes the class and instance consistently. However, it omits the stated MyClass.__call__ link in the creation chain, and says x is bound in the global namespace even though the context only places x in a dictionary; its scope is not specified.",
+        "faithfulness": 4,
+        "relevance": 4,
+        "correctness": 4,
+        "unsupported_claims": [
+          "The variable x is bound in the global namespace; the context does not specify that x is global."
+        ]
+      }
+    },
+    {
+      "id": "gen-3",
+      "type": "fact",
+      "question": "What skills and strategies does Andriy’s AI hackathon session teach participants?",
+      "answer": "Andriy's AI hackathon session teaches participants various skills and strategies essential for succeeding in a hackathon environment. Here’s a detailed overview:\n\n### Skills and Strategies Taught\n\n- **The Winning Mindset**\n  - Understanding why many developers fail at hackathons and how to approach them strategically.\n\n- **The Tech Stack That Wins**\n  - Utilizing **FastAPI**, **React/Next.js**, and modern AI models to create fast prototypes.\n\n- **The 48-Hour Execution Plan**\n  - Developing a realistic timeline for transforming an idea into a working demo within 48 hours.\n\n- **Building a Strong MVP (Minimum Viable Product)**\n  - Emphasizing that one impressive feature can be more valuable than a large, unfinished product.\n\n- **Demo Strategy**\n  - Learning how to design a presentation that captivates judges and stands out from the competition.\n\n### Key Topics Covered\n\n- Fast MVP architecture for hackathons.\n- Integrating AI models into real applications.\n- Practical AI use cases and vision models.\n- Rapid API development using FastAPI.\n- Quick UI development with React.\n- Designing demos that create a memorable \"wow\" moment.\n\n### Networking Opportunities\n- Participants are encouraged to network with fellow developers interested in containerization, security, and modern development workflows after the session.\n\nThese elements combine to provide a comprehensive framework for participants to effectively design, build, and present their AI projects in a competitive hackathon setting.\n\nSources: How to Win an AI Hackathon in 48 Hours.",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Others/How to Win an AI Hackathon in 48 Hours.md"
+      ],
+      "latency_s": 7.94,
+      "tokens": 2439,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:FastAPI": true,
+        "has:48-Hour Execution Plan": true,
+        "has:Demo Strategy": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer accurately summarizes the listed learning outcomes and key topics. Its networking point is also supported. The description of the material as a “comprehensive framework” is an extra characterization not stated in the context.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": [
+          "The session provides a “comprehensive framework.”"
+        ]
+      }
+    },
+    {
+      "id": "gen-4",
+      "type": "fact",
+      "question": "Как сравнивается время выполнения синхронного и асинхронного примеров с пятью задержками по одной секунде?",
+      "answer": "## Comparison of Synchronous and Asynchronous Execution Times\n\nWhen comparing the execution times of synchronous and asynchronous examples with five delays of one second each, the results are as follows:\n\n### Synchronous Execution\n- In a synchronous approach, the code execution is blocked while waiting for each delay to complete. \n- The total execution time for five one-second delays is approximately **5 seconds**.\n  \n```python\nimport time\n\n# Synchronous approach\ndef sync_example():\n    start = time.time()\n    for i in range(5):\n        time.sleep(1)\n    print(f\"Sync: {time.time() - start:.2f}s\")  # ~5 seconds\n```\n\n### Asynchronous Execution\n- In an asynchronous approach, the program does not block while waiting for the delays. Instead, it can handle other tasks during the waiting period.\n- The total execution time for five one-second delays is approximately **1 second** when using `asyncio.gather()` to run the tasks concurrently.\n\n```python\nimport asyncio\n\n# Asynchronous approach\nasync def async_example():\n    start = time.time()\n    tasks = [asyncio.sleep(1) for _ in range(5)]\n    await asyncio.gather(*tasks)\n    print(f\"Async: {time.time() - start:.2f}s\")  # ~1 second\n\nasyncio.run(async_example())\n```\n\n### Summary\n- **Synchronous execution** takes about **5 seconds** due to blocking on each delay.\n- **Asynchronous execution** takes about **1 second** as it allows for concurrent execution of tasks.\n\nThese examples illustrate the efficiency of asynchronous programming, especially in scenarios involving multiple I/O-bound operations.\n\nSources: [Python/Event-loop.md], [Python/Async in Python.md]",
+      "tools": [
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/Async in Python.md",
+        "Python/Event-loop.md"
+      ],
+      "latency_s": 9.44,
+      "tokens": 4579,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:~5 секунд": false,
+        "has:~1 секунда": false,
+        "has:asyncio.gather": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer correctly compares the five sequential one-second sleeps (~5 seconds) with the concurrent sleeps run using asyncio.gather (~1 second). Its explanation and code are supported by the context.",
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": []
+      }
+    },
+    {
+      "id": "gen-5",
+      "type": "fact",
+      "question": "Когда SQLAlchemy загружает связанные посты при стандартной настройке связи и почему это может вызвать проблему N+1?",
+      "answer": "## SQLAlchemy and the N+1 Problem\n\n### SQLAlchemy's Default Behavior\nIn SQLAlchemy, when you define relationships between tables, the default loading strategy for related objects is **Lazy Loading**. This means that related data (e.g., posts associated with users) is not loaded until it is explicitly accessed in the code. \n\nFor example, in the model definition:\n```python\nposts: Mapped[list[\"Post\"]] = relationship(back_populates=\"user\")\n```\nThe `lazy=\"select\"` option indicates that the related posts will only be fetched when you first access `user.posts`.\n\n### N+1 Problem Explained\nThe **N+1 problem** is a performance anti-pattern that occurs when an application makes one query to retrieve a list of parent objects (e.g., users) and then executes an additional query for each parent object to retrieve its related child objects (e.g., posts). \n\n- **Example Scenario**:\n  1. One query retrieves all users (1 query).\n  2. For each user, an additional query is executed to fetch their posts (N queries, where N is the number of users).\n\nThis results in a total of **1 + N** queries, which can significantly increase the load on the database and slow down response times.\n\n### How to Diagnose the N+1 Problem\nTo diagnose the N+1 problem in SQLAlchemy, you can enable SQL query logging by setting `echo=True` when creating the engine:\n```python\nengine = create_async_engine(\"sqlite+aiosqlite:///./test.db\", echo=True)\n```\nThis will log all executed SQL queries to the console, allowing you to identify repeated queries like `SELECT ... WHERE user_id = ...` within a loop.\n\n### Solutions to the N+1 Problem\nTo avoid the N+1 problem, you can use **Eager Loading**, which allows you to load related data alongside the main objects in a single query. In SQLAlchemy 2.0+, you can achieve this using `joinedload` or `selectinload`.\n\n- **Eager Loading Example**:\n```python\nfrom sqlalchemy.orm import selectinload \n\n@app.get(\"/users-optimized\")\nasync def get_users_good(db: AsyncSession = Depends(get_db)):\n    stmt = select(User).options(selectinload(User.posts))\n    result = await db.execute(stmt)\n    users = result.scalars().all()\n    \n    response = []\n    for user in users:\n        posts_data = [post.title for post in user.posts]\n        response.append({\n            \"id\": user.id,\n            \"name\": user.name,\n            \"posts\": posts_data\n        })\n    \n    return response\n```\nThis approach ensures that all necessary data is loaded in one or two queries, significantly reducing database load and improving response times.\n\n### Summary\n- **Default Loading**: SQLAlchemy uses Lazy Loading for relationships, leading to potential N+1 problems.\n- **N+1 Problem**: Occurs when accessing related data triggers additional queries for each parent object.\n- **Diagnosis**: Enable SQL logging to identify repeated queries.\n- **Solution**: Use Eager Loading with `joinedload` or `selectinload` to fetch related data efficiently.\n\n**Sources**: Python/n+1 problem.md",
+      "tools": [
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/LangChain & LangGraph/LangChain & LangGraph.md",
+        "Python/n+1 problem.md",
+        "Python/Уровни изоляции в Postgress.md"
+      ],
+      "latency_s": 15.43,
+      "tokens": 6114,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:lazy=\"select\"": true,
+        "has:Lazy Loading": true,
+        "has:N+1": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer correctly explains that `lazy=\"select\"` loads posts when `user.posts` is first accessed, and that accessing this relationship for each user can produce 1 + N queries. It also includes relevant extra material; the only notable overstatement is implying eager loading always uses a single query.",
+        "faithfulness": 4,
+        "relevance": 4,
+        "correctness": 4,
+        "unsupported_claims": [
+          "The statement that Eager Loading loads related data alongside the main objects in a single query is not generally supported by the context: it specifies that `joinedload` uses one query, while `selectinload` uses two."
+        ]
+      }
+    },
+    {
+      "id": "gen-6",
+      "type": "fact",
+      "question": "When should a Go channel be closed, and which goroutine should close it?",
+      "answer": "In Go, managing channels is crucial for safe communication between goroutines. Here’s a detailed explanation of when and how to close channels, as well as which goroutine should handle the closing.\n\n## When to Close a Channel\n- **Close a channel when no more values will be sent**: This indicates that the channel is no longer needed for sending data.\n- **Example**:\n  ```go\n  package main\n\n  import \"fmt\"\n\n  func main() {\n      ch := make(chan int)\n\n      go func() {\n          for i := 1; i <= 5; i++ {\n              ch <- i\n          }\n          close(ch) // Closing the channel after sending all values\n      }()\n\n      for value := range ch {\n          fmt.Println(value) // Receiving values until the channel is closed\n      }\n  }\n  ```\n\n## Which Goroutine Should Close the Channel\n- **Only the sender should close a channel**: This is an important rule in Go. The goroutine that sends values to the channel is responsible for closing it.\n- **Do not close a channel if receivers may still send to it**: This can lead to unexpected behavior or panic.\n- **Closing a channel twice causes a panic**: Ensure that a channel is closed only once to avoid runtime errors.\n\n## Summary of Important Rules\n- Close the channel when no more values will be sent.\n- Only the sender should close the channel.\n- Avoid closing a channel if there are still receivers that may send to it.\n- Closing a channel more than once will cause a panic.\n\nThese guidelines help maintain safe and effective communication between goroutines in Go.\n\n**Sources**: [Golang/What are goroutines?.md]",
+      "tools": [
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Golang/What are goroutines?.md",
+        "JavaScript/Замыкание (Closure).md",
+        "Python/LangChain & LangGraph/LangChain & LangGraph.md"
+      ],
+      "latency_s": 11.2,
+      "tokens": 4885,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:no more values will be sent": true,
+        "has:sender": true,
+        "has:panic": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer directly states the context’s closing condition and sender rule, and its example matches the provided Go example apart from comments and formatting. It adds a possible consequence of closing while receivers may still send that the context does not explicitly state.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": [
+          "Closing when receivers may still send can lead to “unexpected behavior or panic”; the context says not to close in that situation but only explicitly mentions a panic when closing a channel twice."
+        ]
+      }
+    },
+    {
+      "id": "gen-7",
+      "type": "fact",
+      "question": "Какие функции asyncio используются для создания задачи, совместного ожидания нескольких задач и ожидания с таймаутом?",
+      "answer": "Here are the asyncio functions used for creating tasks, waiting for multiple tasks, and waiting with a timeout in Python:\n\n## Creating Tasks\n- **`asyncio.create_task(coro)`**: This function is used to run a coroutine in the background immediately without blocking the execution of the program. For example:\n  ```python\n  async def main():\n      task1 = asyncio.create_task(task(\"A\", 2))\n      task2 = asyncio.create_task(task(\"B\", 1))\n\n      await task1\n      await task2\n\n  asyncio.run(main())\n  ```\n\n## Waiting for Multiple Tasks\n- **`asyncio.gather(*tasks)`**: This function allows you to run multiple tasks concurrently. It waits for all the tasks to complete and returns their results. For example:\n  ```python\n  async def main():\n      await asyncio.gather(\n          task(\"A\", 2),\n          task(\"B\", 1),\n          task(\"C\", 3)\n      )\n\n  asyncio.run(main())\n  ```\n\n- **`asyncio.as_completed(tasks)`**: This function provides an iterator that yields tasks as they complete, allowing you to process results as they become available.\n\n## Waiting with Timeout\n- **`asyncio.wait_for(task, timeout)`**: This function waits for a task to complete with a specified timeout. If the task does not complete within the timeout period, it raises a `TimeoutError`. For example:\n  ```python\n  await asyncio.wait_for(task, timeout=5.0)\n  ```\n\nThese functions are essential for managing asynchronous operations in Python using the asyncio library.\n\n### Sources:\n- Python/Async in Python.md\n- Python/Event-loop.md",
+      "tools": [
+        "search_about_me",
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/Async in Python.md",
+        "Python/Event-loop.md"
+      ],
+      "latency_s": 12.67,
+      "tokens": 5804,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:asyncio.create_task": true,
+        "has:asyncio.gather": true,
+        "has:asyncio.wait_for": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "Названы все три функции из справки. Однако ответ добавляет сведения, которых нет в контексте: о возврате результатов gather, исключении TimeoutError и общей важности перечисленных функций. Ответ дан на английском, хотя вопрос задан на русском.",
+        "faithfulness": 4,
+        "relevance": 4,
+        "correctness": 5,
+        "unsupported_claims": [
+          "`asyncio.gather` возвращает результаты задач.",
+          "`asyncio.wait_for` вызывает `TimeoutError`, если задача не завершилась за отведённое время.",
+          "`asyncio.as_completed` позволяет обрабатывать результаты по мере их появления.",
+          "Эти функции essential для управления асинхронными операциями в Python."
+        ]
+      }
+    },
+    {
+      "id": "gen-8",
+      "type": "fact",
+      "question": "How does the example create an N+1 query problem when retrieving users and their posts?",
+      "answer": "The N+1 query problem occurs when retrieving users and their posts due to the default behavior of lazy loading in SQLAlchemy. Here's a detailed explanation of how this problem manifests in the code:\n\n### Overview of the N+1 Query Problem\n\n- **Scenario**: You have two tables, `users` and `posts`, where one user can have many posts (One-to-Many relationship).\n- **Default Behavior**: When accessing related data (like posts for each user), SQLAlchemy uses lazy loading by default. This means that a new database query is triggered each time you access the related posts for a user.\n\n### Example Code Leading to N+1 Problem\n\nHere’s a simplified version of the problematic code:\n\n```python\n# BAD EXAMPLE ⚠️\n@app.get(\"/users-n-plus-one\")\nasync def get_users_bad(db: AsyncSession = Depends(get_db)):\n    result = await db.execute(select(User))\n    users = result.scalars().all()\n    \n    response = []\n    for user in users:\n        # Accessing user.posts triggers a new query for each user\n        posts_data = [post.title for post in user.posts] \n        \n        response.append({\n            \"id\": user.id,\n            \"name\": user.name,\n            \"posts\": posts_data\n        })\n    \n    return response\n```\n\n### Database Queries Generated\n\nWhen executing the above code, if there are 5 users, the following queries will be executed:\n\n1. `SELECT * FROM users` (1 query)\n2. `SELECT * FROM posts WHERE user_id = 1` (1 query for each user)\n3. `SELECT * FROM posts WHERE user_id = 2`\n4. `SELECT * FROM posts WHERE user_id = 3`\n5. `SELECT * FROM posts WHERE user_id = 4`\n6. `SELECT * FROM posts WHERE user_id = 5`\n\n**Total Queries**: 6 queries instead of the optimal 2.\n\n### Explanation of the Problem\n\n- **Lazy Loading**: The access to `user.posts` triggers a new query for each user because the posts are not loaded until they are explicitly accessed. This is the core of the N+1 problem.\n- **Impact**: If there are `N` users, `N` additional queries are executed to fetch their posts, leading to inefficient database access.\n\n### Solution: Eager Loading\n\nTo avoid the N+1 problem, you can use eager loading, which loads related data in advance. This can be done using `selectinload` or `joinedload` in SQLAlchemy.\n\n#### Example of Eager Loading\n\nHere’s how you can optimize the query:\n\n```python\n# GOOD EXAMPLE ✅\nfrom sqlalchemy.orm import selectinload \n\n@app.get(\"/users-optimized\")\nasync def get_users_good(db: AsyncSession = Depends(get_db)):\n    stmt = select(User).options(selectinload(User.posts))\n    \n    result = await db.execute(stmt)\n    users = result.scalars().all()\n    \n    response = []\n    for user in users:\n        # Now user.posts is already loaded in memory\n        posts_data = [post.title for post in user.posts]\n        \n        response.append({\n            \"id\": user.id,\n            \"name\": user.name,\n            \"posts\": posts_data\n        })\n    \n    return response\n```\n\n### Conclusion\n\nBy using eager loading, you can significantly reduce the number of queries executed, improving the performance of your application.\n\n**Sources**: Python/n+1 problem.md",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/n+1 problem.md"
+      ],
+      "latency_s": 14.78,
+      "tokens": 3876,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:user.posts": true,
+        "has:NEW запрос": false,
+        "has:N запросов": false,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer correctly explains that accessing `user.posts` triggers one lazy-load query per user, in addition to the initial users query. Its main factual overstatement is calling two queries the “optimal” count, since the context also describes `joinedload` as a one-query option. The code is broadly consistent but is not reproduced exactly as required.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 4,
+        "unsupported_claims": [
+          "Calling 2 queries the “optimal” count; the context says eager loading can use either 1 query (`joinedload`) or 2 (`selectinload`).",
+          "The code snippets are not exact reproductions of the context: they omit setup/import lines and change or remove comments."
+        ]
+      }
+    },
+    {
+      "id": "gen-9",
+      "type": "fact",
+      "question": "What presentations has Andriy delivered, and what were their main topics?",
+      "answer": "Andriy has delivered two notable presentations, each focusing on different aspects of programming and technology. Here are the details:\n\n### 1. The Dark Side of Python\n- **Audience:** IT community in Calgary\n- **Key Topics:**\n  - The mutation of \"immutable\" data types\n  - Multiple inheritance and Method Resolution Order (MRO)\n  - The concept that nothing is truly \"private\" or \"protected\"\n  - Breaking internal logic by redefining \"dunder\" (special, built-in) methods\n  - Metaclasses\n- **Summary:** This presentation highlighted the complexities of Python, demonstrating that while it may appear simple, there are many intricate mechanics that can lead to sophisticated solutions.\n\n### 2. How to Win an AI Hackathon in 48 Hours\n- **Focus:** Strategies for competing in AI hackathons\n- **Key Lessons:**\n  - Hackathons are won by execution, clarity, and the ability to create understandable projects rather than perfect code.\n  - Importance of simplicity in tech solutions:\n    - Choosing a familiar tech stack\n    - Moving quickly instead of overengineering\n    - Leveraging AI and existing models\n    - Emphasizing the demo experience and storytelling\n- **Key Topics:**\n  - Fast MVP architecture for hackathons\n  - Integrating AI models into applications\n  - Building APIs quickly with FastAPI\n  - Rapid UI development with React\n  - Designing impactful demos\n- **Summary:** Andriy shared his successful approach to hackathons, emphasizing that speed, simplicity, and a compelling vision are more critical than perfection.\n\nThese presentations reflect Andriy's expertise in Python and AI development, showcasing his ability to communicate complex topics effectively.\n\n**Sources:** \n- About myself\n- How to Win an AI Hackathon in 48 Hours",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "About me/About myself.md",
+        "Others/How to Win an AI Hackathon in 48 Hours.md",
+        "Python/LangChain & LangGraph/LangChain & LangGraph.md"
+      ],
+      "latency_s": 7.82,
+      "tokens": 2987,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:The Dark Side of Python": true,
+        "has:AI hackathon": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer accurately identifies both presentations and gives topics and lessons supported by the notes. It adds a closing assessment of Andriy’s expertise and communication ability that the context does not explicitly establish.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": [
+          "The presentations reflect Andriy’s expertise in Python and AI development.",
+          "The presentations showcase his ability to communicate complex topics effectively."
+        ]
+      }
+    },
+    {
+      "id": "gen-10",
+      "type": "fact",
+      "question": "Что происходит с выполнением функции при использовании `return` и `yield`, и какой объект возвращает функция с `yield`?",
+      "answer": "In Python, the behavior of functions using `return` and `yield` is fundamentally different. Here’s a detailed explanation of each:\n\n## Return in Python\n- **Function Completion**: When a function executes a `return` statement, it immediately terminates the function and sends a value back to the caller.\n- **Result Type**: The result returned by a function using `return` can be any Python object (like a list, number, string, etc.).\n- **Memory Usage**: The entire result is computed and stored in memory before being returned, which can be inefficient for large datasets.\n\n### Example\n```python\ndef example_function():\n    return [1, 2, 3]\n```\nIn this example, calling `example_function()` will return the list `[1, 2, 3]` immediately.\n\n## Yield in Python\n- **Function Pausing**: When a function encounters a `yield` statement, it pauses its execution and returns a value to the caller. The state of the function (including local variables) is saved, allowing it to resume later.\n- **Generator Object**: A function that uses `yield` does not return a value in the traditional sense. Instead, it returns a generator object, which can be iterated over to retrieve values one at a time.\n- **Lazy Evaluation**: This allows for memory-efficient processing of large datasets, as values are generated on-the-fly rather than all at once.\n\n### Example\n```python\ndef example_generator():\n    yield 1\n    yield 2\n    yield 3\n```\nIn this case, calling `example_generator()` returns a generator object. You can retrieve values using `next()` or in a loop:\n```python\ngen = example_generator()\nprint(next(gen))  # Outputs: 1\nprint(next(gen))  # Outputs: 2\n```\n\n## Key Differences\n- **Execution**: `return` ends the function, while `yield` pauses it.\n- **Return Type**: `return` gives a single value, whereas `yield` produces a generator object.\n- **Memory Efficiency**: `yield` is more memory-efficient for large datasets as it generates values one at a time.\n\n## When to Use Each\n- Use `return` when you need to compute and return a complete result immediately.\n- Use `yield` when dealing with large or infinite datasets where you want to process items one at a time.\n\n### Summary\n- `return` completes the function and returns a value.\n- `yield` pauses the function, returning a generator that can produce values on demand.\n\nSources: \n- Python/Stages of Python Code Execution\n- Python/Yield vs Return",
+      "tools": [
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/Async in Python.md",
+        "Python/CPython Internals.md",
+        "Python/Yield vs Return.md",
+        "Python/Этапы выполнения Python-кода.md"
+      ],
+      "latency_s": 12.28,
+      "tokens": 5675,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:завершает": false,
+        "has:ставит функцию на паузу": false,
+        "has:объект-генератор": false,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "Основное различие изложено верно и совпадает с контекстом: `return` завершает функцию, а `yield` приостанавливает её и функция с `yield` возвращает объект-генератор. Ответ добавляет общие утверждения и примеры кода, которых в контексте нет.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": [
+          "Утверждение, что `return` может возвращать любой объект Python.",
+          "Общее утверждение, что при `return` весь результат всегда вычисляется и хранится в памяти до возврата; контекст описывает это для конкретного варианта со списком.",
+          "Примеры `example_function` и `example_generator` и их код отсутствуют в контексте.",
+          "Утверждение, что `yield` всегда экономнее по памяти для больших данных: контекст уточняет, что экономия касается сборки результата, а другие операции могут всё равно создавать полный список."
+        ]
+      }
+    },
+    {
+      "id": "gen-11",
+      "type": "fact",
+      "question": "Почему память процесса Python может не уменьшиться после удаления объектов, и какие способы помогают освободить или сократить её использование?",
+      "answer": "## Why Python Process Memory May Not Decrease After Object Deletion\n\nIn Python, particularly in CPython, memory management is complex and involves multiple layers. Here are the key reasons why memory may not be released back to the operating system after objects are deleted:\n\n1. **pymalloc Holds Arenas**: Even if all objects are deleted, the 256 KB arenas remain allocated within the process.\n2. **OS Allocator Caches**: The implementation of `malloc` keeps free chunks \"in reserve\" for future allocations.\n3. **Fragmentation**: Frequent small allocations and deallocations can lead to scattered free pages, making it difficult for the OS to reclaim them.\n4. **Global Caches**: Interning of strings, frame caches, and type caches (`PyTypeObject`) can also contribute to memory not being released.\n\n### How to Free or Reduce Memory Usage\n\nTo manage memory more effectively in Python, consider the following strategies:\n\n- **Avoid Relying on `del`**: Simply deleting objects does not guarantee immediate memory release.\n- **Use Generators**: For large datasets, using generators can significantly reduce memory usage.\n- **Utilize `array` and `numpy`**: These data structures are more memory-efficient for large numerical datasets.\n- **Implement `__slots__` in Classes**: This can save approximately 40-60% of memory for instances by avoiding the overhead of a `__dict__`.\n- **Avoid Cyclic References**: Cyclic references can prevent the garbage collector from reclaiming memory.\n- **Use Process Pools or Periodic Restarts**: In long-running services, consider using process pools or periodically restarting workers to free up memory.\n\n### Tools for Memory Analysis in Python\n\nSeveral tools can help analyze memory usage in Python:\n\n| Tool                     | Description                                      |\n|--------------------------|--------------------------------------------------|\n| `sys.getsizeof(obj)`     | Returns the size of the object (not including nested objects). |\n| `tracemalloc`            | Takes snapshots of memory allocation, helps find leaks. |\n| `gc.get_objects()`       | Helps debug cyclic references.                   |\n| `memory_profiler`        | Visualizes memory growth over time.              |\n| `pympler`                | Provides detailed analysis of object types and snapshots. |\n\n### Example of Using `tracemalloc`\n\nHere is an example of how to use `tracemalloc` to analyze memory usage:\n\n```python\nimport tracemalloc\ntracemalloc.start()\n\ndata = [i**2 for i in range(100_000)]\nsnapshot = tracemalloc.take_snapshot()\nfor stat in snapshot.statistics('lineno')[:5]:\n    print(stat)\n```\n\n### Forcing Memory Release\n\nTo force memory release back to the OS, you can use the following methods:\n\n- **Linux/glibc**: \n  ```python\n  import ctypes\n  ctypes.CDLL(\"libc.so.6\").malloc_trim(0)\n  ```\n- **Windows**: There is no direct equivalent; restarting the process or using `multiprocessing` can help.\n\n### Best Practices\n\n- Restart workers periodically.\n- Use generators instead of lists for large data.\n- Implement `__slots__` in classes to save memory.\n\nThese strategies can help manage memory more effectively in Python applications.\n\n**Sources**: Python/Python Memory Management.md, Python/Python Memory Data Storage.md.",
+      "tools": [
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/CPython Internals.md",
+        "Python/Python Memory Data Storage.md",
+        "Python/Python Memory Management.md"
+      ],
+      "latency_s": 15.97,
+      "tokens": 6792,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:pymalloc держит арены": false,
+        "has:Фрагментация": false,
+        "has:malloc_trim(0)": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "Ответ в целом опирается на контекст и перечисляет причины, способы оптимизации и вызов malloc_trim(0). Однако утверждение о циклических ссылках слишком общее: контекст уточняет проблему для циклов с __del__. Ответ также дан на английском, хотя вопрос задан по-русски.",
+        "faithfulness": 4,
+        "relevance": 4,
+        "correctness": 4,
+        "unsupported_claims": [
+          "«Cyclic references can prevent the garbage collector from reclaiming memory» сформулировано как общее правило; контекст говорит об этом для циклических ссылок вместе с __del__."
+        ]
+      }
+    },
+    {
+      "id": "gen-12",
+      "type": "fact",
+      "question": "Какие три правила помогают сохранить качество поиска и контекст при разбиении документов для RAG?",
+      "answer": "To maintain search quality and context when splitting documents for Retrieval-Augmented Generation (RAG), three key rules should be followed:\n\n### 1. Semantic Boundaries\n- **Definition**: Do not split text arbitrarily. Instead, ensure that the splitting occurs at meaningful points such as paragraphs, sentences, or headings. This helps preserve the context and meaning of the text.\n\n### 2. Overlap\n- **Definition**: Ensure that the boundaries of the chunks overlap (typically by 10-20%). This overlap is crucial to prevent the loss of context at the edges of the chunks, allowing for better continuity in the information retrieved.\n\n### 3. Metadata\n- **Definition**: Each chunk should retain metadata indicating its origin, such as page number, section title, or file name. This information is essential for citation and filtering purposes, enhancing the reliability of the retrieval process.\n\nThese rules are fundamental for effective chunking strategies in RAG applications, significantly impacting the quality of search results and the responses generated by language models.\n\nSources: Python/LangChain & LangGraph/LangChain & LangGraph.md",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/LangChain & LangGraph/LangChain & LangGraph.md"
+      ],
+      "latency_s": 6.87,
+      "tokens": 3997,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:Semantic Boundaries": true,
+        "has:Overlap": true,
+        "has:Метаданные": false,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer gives the same three rules as the context and accurately explains their main points. One phrase about metadata enhancing retrieval reliability goes beyond what the context explicitly states, which says metadata is critical for citation and filtering.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": [
+          "Metadata enhances the reliability of the retrieval process."
+        ]
+      }
+    },
+    {
+      "id": "gen-13",
+      "type": "fact",
+      "question": "Какие шаги помогут выяснить причину замедления PostgreSQL после релиза или высокой нагрузки на сервер?",
+      "answer": "To diagnose the cause of PostgreSQL performance degradation after a release or under high server load, the following steps can be taken:\n\n### 1. Analyze Slow Queries\n- **Use `pg_stat_statements`**: Identify top queries by total time and calls.\n- **Run `EXPLAIN (ANALYZE, BUFFERS)`**: Check for sequential scans, bad joins, or missing indexes.\n\n### 2. Monitor Active Sessions\n- **Check `pg_stat_activity`**: Look for idle transactions, long-running queries, or locks.\n- **Examine `pg_locks`**: Identify deadlocks or blocking chains.\n\n### 3. Evaluate Database Statistics\n- **Run `ANALYZE`**: Ensure statistics are up to date.\n- **Check `autovacuum` settings**: Monitor for table bloat and ensure it is functioning correctly.\n\n### 4. Review Resource Usage\n- **Monitor CPU and Memory**: Identify if the CPU is at 100% and find the culprit.\n- **Check `shared_buffers` and `work_mem` settings**: Ensure they are configured appropriately for your workload.\n\n### 5. Investigate Index Usage\n- **Use `pg_stat_user_indexes`**: Check index usage and effectiveness.\n- **Consider creating partial indexes**: For example, `CREATE INDEX ... WHERE status = 'active'` to optimize specific queries.\n\n### 6. Assess Connection Pooling\n- **Implement `pgbouncer`**: Compare session vs transaction pooling modes to manage connections efficiently.\n\n### 7. Check for MVCC Issues\n- **Run `VACUUM VERBOSE`**: Identify if there are dead tuples and if vacuuming is needed.\n- **Monitor for long transactions**: These can block autovacuum and lead to bloat.\n\n### 8. Review Configuration Settings\n- **Check WAL settings**: Ensure proper configuration for durability and performance.\n- **Adjust checkpoint settings**: Frequent checkpoints can lead to I/O spikes; consider tuning `checkpoint_completion_target`, `max_wal_size`, and `min_wal_size`.\n\n### 9. Use Diagnostic Tools\n- **Utilize tools like `pgBadger` and `auto_explain`**: These can help in analyzing query performance and identifying issues.\n\n### Conclusion\nThese steps provide a structured approach to diagnosing performance issues in PostgreSQL. Each step focuses on different aspects of the database system, from query performance to resource management.\n\n**Sources**: \n- TOP PostgreSQL Questions (sections on performance troubleshooting, MVCC, VACUUM, and diagnostics).",
+      "tools": [
+        "search_about_me",
+        "search_about_me",
+        "search_about_me"
+      ],
+      "retrieved": [
+        "Python/ТОП PostgreSQL Questions.md",
+        "Python/Уровни изоляции в Postgress.md"
+      ],
+      "latency_s": 12.9,
+      "tokens": 8905,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:pg_stat_statements": true,
+        "has:EXPLAIN (ANALYZE, BUFFERS)": true,
+        "has:pg_stat_activity": true,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "Ответ включает основные шаги из чек-листа: pg_stat_statements, EXPLAIN, pg_stat_activity, pg_locks, проверку ANALYZE/autovacuum и параметров памяти. Также добавлены близкие темы из контекста — VACUUM, пулинг, WAL и инструменты диагностики. Некоторые формулировки о мониторинге памяти и проверке настроек выходят за точные сведения контекста.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 5,
+        "unsupported_claims": [
+          "Отдельно мониторить использование памяти — контекст предлагает проверить shared_buffers и work_mem, но не говорит о мониторинге памяти.",
+          "Проверить настройки autovacuum и убедиться, что он функционирует корректно — контекст советует проверить autovacuum на bloat, но не предписывает проверять его настройки или подтверждать корректность работы.",
+          "Убедиться, что shared_buffers и work_mem настроены appropriately for your workload — контекст перечисляет их для проверки, но не формулирует критерий настройки под конкретную нагрузку."
+        ]
+      }
+    },
+    {
+      "id": "gen-14",
+      "type": "fact",
+      "question": "Why does repeating the FastAPI `POST /items/` request with the same item change the application state?",
+      "answer": "Repeating the FastAPI `POST /items/` request with the same item changes the application state because the `POST` method is not idempotent by default. Here’s a detailed explanation:\n\n### Understanding Idempotency\n- **Idempotency** refers to the property of certain operations in which performing the same operation multiple times has the same effect as performing it once.\n- In HTTP methods:\n  - `GET`, `HEAD`, and `OPTIONS` are idempotent because they do not change the state of the server.\n  - `PUT` and `DELETE` are idempotent because repeating them yields the same result.\n  - `POST` is **not idempotent** by default, as it typically creates a new resource each time it is called.\n\n### FastAPI Example\nIn the provided FastAPI example, the `POST /items/` endpoint is defined as follows:\n\n```python\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\ndb = []\n\nclass Item(BaseModel):\n    name: str\n\n@app.post(\"/items/\")\ndef create_item(item: Item):\n    db.append(item)\n    return {\"status\": \"created\", \"total\": len(db)}\n```\n\n#### Behavior on Repeated Requests\nWhen you send a `POST` request to create an item, the following occurs:\n1. The first request adds the item to the `db` list and returns a response indicating that the item was created.\n   ```bash\n   curl -X POST http://localhost:8000/items/ -d '{\"name\":\"Apple\"}'\n   # → {\"status\": \"created\", \"total\": 1}\n   ```\n2. A second identical request adds another item to the `db` list, resulting in a different state.\n   ```bash\n   curl -X POST http://localhost:8000/items/ -d '{\"name\":\"Apple\"}'\n   # → {\"status\": \"created\", \"total\": 2}  ← state has changed!\n   ```\n\n### Making POST Idempotent\nTo make a `POST` request idempotent, you can implement an **Idempotency Key**. This key allows the server to recognize repeated requests and avoid creating duplicate resources. Here’s an example of how to implement it:\n\n```python\nfrom fastapi import FastAPI, Header, HTTPException\nfrom pydantic import BaseModel\nimport uuid\n\napp = FastAPI()\ndb = []\nprocessed_keys = set()  # In production: use Redis/DB with TTL\n\nclass Item(BaseModel):\n    name: str\n\n@app.post(\"/items/\")\ndef create_item(\n    item: Item,\n    idempotency_key: str = Header(..., alias=\"Idempotency-Key\")\n):\n    if idempotency_key in processed_keys:\n        return {\"status\": \"already_processed\", \"idempotency_key\": idempotency_key}\n    \n    processed_keys.add(idempotency_key)\n    db.append(item)\n    return {\"status\": \"created\", \"id\": str(uuid.uuid4())}\n```\n\nWith this implementation, if the same `Idempotency-Key` is sent with a repeated request, the server will return a response indicating that the request has already been processed, thus maintaining the application state.\n\n### Conclusion\nIn summary, the `POST` method in FastAPI is not idempotent by default, leading to changes in application state with repeated requests. Implementing an Idempotency Key can help manage this behavior effectively.\n\n**Sources:** Python/ИДЕМПОТЕНТНОСТЬ.md",
+      "tools": [
+        "search_about_me"
+      ],
+      "retrieved": [
+        "JavaScript/React + TypeScript notes.md",
+        "Python/Refresh token.md",
+        "Python/n+1 problem.md",
+        "Python/ИДЕМПОТЕНТНОСТЬ.md"
+      ],
+      "latency_s": 15.71,
+      "tokens": 4567,
+      "checks": {
+        "not_refused": true,
+        "used_tools": true,
+        "source_retrieved": true,
+        "has:не идемпотентен": false,
+        "has:два ресурса": false,
+        "no_invented_urls": true,
+        "english": true
+      },
+      "verdict": {
+        "reasoning": "The answer directly explains that each call appends the item, so the repeated request creates a second resource and changes the total from 1 to 2. Its main explanation matches the context. One general definition is not stated there, and the idempotency-key code changes a context comment, despite the requirement that code match exactly.",
+        "faithfulness": 4,
+        "relevance": 5,
+        "correctness": 4,
+        "unsupported_claims": [
+          "The standalone definition that idempotency means repeated operations have the same effect as performing the operation once is not explicitly stated in the context.",
+          "The idempotency-key code changes the context comment `# В проде: Redis/DB с TTL` to `# In production: use Redis/DB with TTL`, so the code does not match the context exactly."
+        ]
+      }
+    }
+  ]
+}

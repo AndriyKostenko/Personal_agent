@@ -13,6 +13,7 @@ from services.calendar_service import CalendarService
 from services.usage_service import UsageService
 from services.vector_service import VectorStoreService
 from core.settings import Settings
+from core.tracing import tracer_callbacks
 from agent.tools import build_tools
 
 # ─────────────────────────────  GRAPH  ─────────────────────────────
@@ -73,7 +74,9 @@ class Agent:
         "- If the tools found nothing, say you don't have this information.\n"
         "- ALWAYS answer in English, whatever language the question or the notes are in. "
         "Translate headings, explanations and diagram labels from the notes into English. "
-        "Keep code, identifiers, URLs and technical terms exactly as they are.\n"
+        "Inside fenced code blocks copy everything character by character, INCLUDING comments and "
+        "string literals in Russian or Ukrainian. Translate only the prose outside the code. "
+        "Keep identifiers, URLs and technical terms exactly as they are.\n"
         "\n"
         "ANSWER STYLE:\n"
         "- Give a well-structured answer in Markdown: short intro, then sections "
@@ -83,6 +86,9 @@ class Agent:
         "- Do NOT add praise, adjectives, opinions, conclusions or assumptions that are not "
         "stated in the notes (no 'seasoned', 'extensive experience', 'passionate', "
         "'this shows his role as...'). If a note says only 'father', say only that he is a father.\n"
+        "- Never infer skills or experience from indirect evidence (a tool he installed, a topic "
+        "mentioned once, a related technology). Report exactly what the note says, e.g. 'The notes "
+        "only mention that he has k9s (a Kubernetes CLI) installed', and say the notes do not cover more.\n"
         "- If the notes contain little on the topic, answer briefly with what is there and "
         "say that the notes do not cover the rest. A short honest answer beats a long invented one.\n"
         "- Explain topics from technical notes in your own words, staying faithful to the notes.\n"
@@ -90,6 +96,9 @@ class Agent:
         "fenced blocks with the language (```python). Never invent or modify code and never "
         "add code that is not in the notes.\n"
         "- Mention the note titles you used at the end ('Sources: ...')."
+        "- Never infer skills or experience from indirect evidence (a tool he installed, a topic "
+        "mentioned once, a related technology). Report exactly what the note says, e.g. 'The notes "
+        "only mention that he has k9s (a Kubernetes CLI) installed', and say the notes do not cover more.\n"
     )
     # appended to SYSTEM_PROMPT only when the booking tools exist
     BOOKING_PROMPT = (
@@ -223,17 +232,30 @@ class Agent:
     # ----- public API -------
 
     @staticmethod
-    def _run_args(message: str, thread_id: str, client_id: str, ip: str) -> tuple[dict, dict]:
+    def _run_args(
+        message: str, thread_id: str, client_id: str, ip: str, source: str = "web"
+    ) -> tuple[dict, dict]:
         # client_id / ip are read by tools (booking limits); they are set by the server only
         return (
             {"messages": [{"role": "user", "content": message}]},
             {
-                "configurable": {"thread_id": thread_id, "client_id": client_id, "ip": ip},
+                "configurable": {
+                    "thread_id": thread_id,
+                    "client_id": client_id,
+                    "ip": ip,
+                },
                 "recursion_limit": 12,
+                # ---- observability only: the graph ignores these, LangSmith shows them ----
+                "run_name": "personal_agent",
+                "tags": [source],  # web | eval: filter in the LangSmith UI
+                "metadata": {"source": source, "model": "openai/gpt-4o-mini"},
+                "callbacks": tracer_callbacks(),
             },
         )
 
-    async def ainvoke(self, message: str, thread_id: str, client_id: str, ip: str) -> str:
+    async def ainvoke(
+        self, message: str, thread_id: str, client_id: str, ip: str
+    ) -> str:
         state_in, config = self._run_args(message, thread_id, client_id, ip)
         result = await self.graph.ainvoke(state_in, config=config)
         return result["messages"][-1].content
@@ -261,15 +283,23 @@ class Agent:
             return f"Found {n} photo(s)" if n else "Nothing found"
         if name == "check_availability":
             n = sum(
-                line.count(", ") + 1 for line in text.splitlines() if line.startswith("- ")
+                line.count(", ") + 1
+                for line in text.splitlines()
+                if line.startswith("- ")
             )
             return f"Found {n} free slot(s)" if n else "No free slots"
         if name == "book_call":
-            return "Call booked" if text.startswith("Booked:") else "Could not book the call"
+            return (
+                "Call booked"
+                if text.startswith("Booked:")
+                else "Could not book the call"
+            )
         n = text.count("[source:")
         return f"Found {n} note fragment(s)" if n else "Nothing found"
 
-    async def astream_steps(self, message: str, thread_id: str, client_id: str, ip: str):
+    async def astream_steps(
+        self, message: str, thread_id: str, client_id: str, ip: str
+    ):
         """Runs the graph and yields UI events:
         {"type": "step", "text": ...}   the agent is doing something
         {"type": "token", "text": ...}  a piece of the final answer as it is generated
@@ -309,7 +339,9 @@ class Agent:
                 elif node == "agent":
                     reply = output["messages"][-1]
                     if reply.tool_calls:
-                        if streamed:  # the model wrote text before a tool call: discard it
+                        if (
+                            streamed
+                        ):  # the model wrote text before a tool call: discard it
                             yield {"type": "reset"}
                             streamed = False
                         for call in reply.tool_calls:
@@ -322,7 +354,10 @@ class Agent:
                 elif node == "tools":
                     for result in output["messages"]:
                         text = result.content if isinstance(result.content, str) else ""
-                        yield {"type": "step", "text": self._result_step(result.name, text)}
+                        yield {
+                            "type": "step",
+                            "text": self._result_step(result.name, text),
+                        }
                     yield {"type": "step", "text": "Writing the answer"}
 
                 elif node == "refuse":

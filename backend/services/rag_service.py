@@ -6,6 +6,7 @@ from langchain_openai import ChatOpenAI
 from schemas.schemas import FactCheckingAnswer
 from services.vector_service import VectorStoreService
 from core.settings import Settings
+from core.tracing import tracer_callbacks
 
 SYSTEM_PROMPT = (
     "You are an experienced AI mentor.\n"
@@ -64,7 +65,12 @@ class RagService:
             }
 
         result: FactCheckingAnswer = await self.chain.ainvoke(
-            {"context": "\n\n---\n\n".join(context_blocks), "question": question}
+            {"context": "\n\n---\n\n".join(context_blocks), "question": question},
+            config={
+                "callbacks": tracer_callbacks(),
+                "run_name": "ask_mentor",
+                "tags": ["web", "ask_mentor"],
+            },
         )
         return {
             "thought_process": result.thought_process,

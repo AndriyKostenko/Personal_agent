@@ -7,6 +7,7 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
+    INDEX_DOCUMENT_API_URL: str = "http://127.0.0.1:8000/api/v1/index/document"
     PROJECT_NAME: str = "AI Obsidian Mentor"
     VERSION: str = "0.1.0"
     OPENROUTER_API_URL: str
@@ -22,6 +23,7 @@ class Settings(BaseSettings):
         Path(__file__).resolve().parent.parent / "media"
     )  # не зависит от cwd
     MEDIA_BASE_URL: str = "http://127.0.0.1:8000/media"
+    VALIDATION_MODEL: str = "openai/gpt-6-luna"
     VISION_MODEL: str = "openai/gpt-4o-mini"  # любая vision-модель OpenRouter
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     PHOTO_FOLDERS: list[str] = [
@@ -66,6 +68,14 @@ class Settings(BaseSettings):
     MAX_BOOKINGS_PER_DAY: int = (
         10  # all visitors together, last 24 hours: protects the calendar
     )
+
+    # ───────────── LangSmith tracing (observability) ─────────────
+    # read by core/tracing.py; LangChain's automatic tracer stays OFF (see there)
+    LANGSMITH_TRACING: bool = False
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGSMITH_API_KEY: SecretStr = SecretStr("")
+    LANGSMITH_AGENT_ID: str = ""
+    LANGSMITH_AGENT_ENVIRONMENT: str = "local"  # local | development | staging | production
 
     @property
     def booking_enabled(self) -> bool:

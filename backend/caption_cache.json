@@ -1,0 +1,102 @@
+{
+  "626974d248ee22c8d8215bceb59df99da1634726392dbc895b766d265b953cf9": {
+    "caption": "A person jumps to make a basket while playing basketball on an outdoor court, with another person watching nearby. The scene is set in a green, open area with trees and buildings in the background.",
+    "tags": [
+      "basketball",
+      "outdoor",
+      "sports",
+      "action",
+      "court"
+    ],
+    "visible_text": ""
+  },
+  "86a1013081a3edc69c8f2cdfd36e34858f2b2abb36db7e665e81bae77f1a61d5": {
+    "caption": "A person squats on a rock with a Shiba Inu dog in a scenic outdoor setting. Snow-capped mountains and evergreen trees create a beautiful backdrop.",
+    "tags": [
+      "outdoors",
+      "mountains",
+      "dog",
+      "Shiba Inu",
+      "nature",
+      "scenic"
+    ],
+    "visible_text": ""
+  },
+  "a4d8e4e5aa407f52d83a41faf78acd97bb03c2cec7501caecc130c15789232d2": {
+    "caption": "A screenshot of a PPE Vision Detection System interface displaying the detection results for a person wearing a helmet. The system indicates a confidence level of 84% for the helmet detection, along with a bounding box around the detected individual.",
+    "tags": [
+      "PPE",
+      "detection system",
+      "safety",
+      "technology",
+      "interface"
+    ],
+    "visible_text": "PPE Vision Detectio System\nDetection\nTimestamp: 2025-12-23, 8:54:14 PM\nComplaints: 1\nViolations: 0\nDetections:\n• helmet: 84.0%, bbox: [207, 83, 468, 346]"
+  },
+  "04be249ae03a96b5d7b3c167cd5abb126b4ea8ba6f9ec0d7c03aab65a4dd5044": {
+    "caption": "This image displays the winners of a Full-Stack Hackathon, highlighting the Grand Prize winner, runner-ups, and category winners. Notably, Andriy Kostenko is recognized as a runner-up alongside Travis Geislinger.",
+    "tags": [
+      "hackathon",
+      "winners",
+      "programming",
+      "competition",
+      "software engineering"
+    ],
+    "visible_text": "Full-Stack Hackathon Winners\nGrand Prize Winner\nJohn Zhou - AI Maintenance Predictor Dashboard\nRunner Ups\nTravis Geislinger\nAndriy Kostenko\nCategory Winners\nUX/UI - Benedict Kpaduwa\nCollaboration - Dhwanil Shah\nTechnical Depth - William Lowell & Nicholas Irvine\nEmerging Engineers\nMonica Nieckula\nNaveed Khan\nCommunity Choice\nWilliam Lowell & Nicholas Irvine"
+  },
+  "a7c20ea145483da0507a51a66145662f41e78a92e8150802e71b659f2d22f148": {
+    "caption": "A person is seated at a table with a laptop, presenting on how to win an AI hackathon in 48 hours. A large screen displays the presentation, featuring programming languages and tools like Python, JavaScript, and FastAPI.",
+    "tags": [
+      "presentation",
+      "hackathon",
+      "AI",
+      "technology",
+      "programming"
+    ],
+    "visible_text": "How to Win an AI Hackathon in 48 Hours\nUsing Python + JavaScript + AI = a battle tested playbook for speed, impact, and demo day domination."
+  },
+  "377b9be1c4980b42991e9eebe0fc8d2be3d1458420e9b7c34fcf656244694759": {
+    "caption": "A person is giving a presentation in a classroom setting, discussing the topic of metaclasses in programming. A screen displays the title 'Metaclasses: Classes That Build Classes' along with related visuals.",
+    "tags": [
+      "presentation",
+      "classroom",
+      "programming",
+      "metaclasses",
+      "Python"
+    ],
+    "visible_text": "Metaclasses: Classes That Build Classes"
+  },
+  "ca8338a667c3045fe1bfe4a755d98760732bf5171c3b5b6d99ea13a55bc011d1": {
+    "caption": "A person is giving a presentation titled \"The Dark Side of Python\" at a meetup, with a slide featuring a character named Darth Python on the screen. The presenter is wearing a black t-shirt with a humorous programming quote, while a laptop displays additional information about the event.",
+    "tags": [
+      "presentation",
+      "Python",
+      "meetup",
+      "technology",
+      "programming"
+    ],
+    "visible_text": "THE DARK SIDE OF PYTHON"
+  },
+  "8173c494e1895b32d083450af1779c912c20771b3260ea26a286558e7b861ceb": {
+    "caption": "A person is sitting on a bed, wearing a dark blue sweatshirt adorned with a cosmic pattern featuring stars and planets. The background shows a softly lit room with a plant and decorative pillows.",
+    "tags": [
+      "bedroom",
+      "sweater",
+      "cosmic",
+      "portrait",
+      "person"
+    ],
+    "visible_text": ""
+  },
+  "25809c1381bdf9509f2b75457e05b1233213eb11d0ac1a998d5a0e0afb77bd4c": {
+    "caption": "A person is holding a cat while playfully posing for the camera. The background features a soft, light-colored wall with subtle patterns.",
+    "tags": [
+      "person",
+      "cat",
+      "portrait",
+      "playful",
+      "indoor"
+    ],
+    "visible_text": ""
+  }
+}

@@ -21,6 +21,7 @@ from schemas.schemas import (
     IndexResposne,
     QueryRequest,
     SearchResponse,
+    IndexDocumentRequest,
 )
 from services.usage_service import LimitExceeded
 
@@ -29,7 +30,9 @@ logger = logging.getLogger("ai_mentor")
 router = APIRouter()
 
 # Internal errors (they can contain provider details and ids) never reach the visitor.
-FAILED_MESSAGE = "The assistant could not answer right now. This question was not counted."
+FAILED_MESSAGE = (
+    "The assistant could not answer right now. This question was not counted."
+)
 
 
 def _limit_error(e: LimitExceeded) -> HTTPException:
@@ -44,7 +47,9 @@ def _sse(event: dict) -> str:
 
 
 # ───────────── admin: filling the knowledge base (used by pipeline/sync_notes.py) ─────────────
-@router.post("/index", response_model=IndexResposne, dependencies=[Depends(require_admin)])
+@router.post(
+    "/index", response_model=IndexResposne, dependencies=[Depends(require_admin)]
+)
 async def index_text(data: IndexRequest, vector_service: vector_service_dependency):
     try:
         full_metadata = {"source": data.source, **data.metadata}
@@ -57,7 +62,9 @@ async def index_text(data: IndexRequest, vector_service: vector_service_dependen
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/search", response_model=SearchResponse, dependencies=[Depends(require_admin)])
+@router.post(
+    "/search", response_model=SearchResponse, dependencies=[Depends(require_admin)]
+)
 async def search_text(data: QueryRequest, vector_service: vector_service_dependency):
     try:
         results = await vector_service.search(data.query)
@@ -71,7 +78,9 @@ async def search_text(data: QueryRequest, vector_service: vector_service_depende
 
 # ───────────── visitors ─────────────
 @router.get("/usage")
-async def get_usage(client: client_dependency, usage_service: usage_dependency, agent: agent_dependency):
+async def get_usage(
+    client: client_dependency, usage_service: usage_dependency, agent: agent_dependency
+):
     """The visitor's counters (questions and chats used and their limits) and whether booking is on."""
     usage = await usage_service.get_usage(client.client_id)
     return {**usage, "booking_enabled": agent.booking_enabled}
@@ -99,8 +108,12 @@ async def ask_mentor(
         )
     except Exception:
         logger.exception("ask_mentor failed")
-        await usage_service.refund(client.client_id, client.ip, None, reservation.new_chat)
-        raise HTTPException(status_code=500, detail={"code": "failed", "message": FAILED_MESSAGE})
+        await usage_service.refund(
+            client.client_id, client.ip, None, reservation.new_chat
+        )
+        raise HTTPException(
+            status_code=500, detail={"code": "failed", "message": FAILED_MESSAGE}
+        )
 
 
 @router.post("/chat/stream")
@@ -116,7 +129,9 @@ async def chat_stream(
     HTTP 429 and never reaches the LLM."""
     thread_id = str(data.thread_id)
     try:
-        reservation = await usage_service.reserve(client.client_id, client.ip, thread_id)
+        reservation = await usage_service.reserve(
+            client.client_id, client.ip, thread_id
+        )
     except LimitExceeded as e:
         raise _limit_error(e)
 
@@ -127,7 +142,9 @@ async def chat_stream(
         yield _sse({"type": "usage", "usage": reservation.usage})
         answered = False
         try:
-            async for event in agent.astream_steps(data.message, thread_key, client.client_id, client.ip):
+            async for event in agent.astream_steps(
+                data.message, thread_key, client.client_id, client.ip
+            ):
                 answered = answered or event["type"] == "answer"
                 yield _sse(event)
             if not answered:
@@ -136,7 +153,9 @@ async def chat_stream(
             # A failure that is not the visitor's fault gives the question back.
             # (A visitor who just closes the page is not refunded: the LLM has been paid for.)
             logger.exception("chat stream failed")
-            usage = await usage_service.refund(client.client_id, client.ip, thread_id, reservation.new_chat)
+            usage = await usage_service.refund(
+                client.client_id, client.ip, thread_id, reservation.new_chat
+            )
             yield _sse({"type": "usage", "usage": usage})
             yield _sse({"type": "error", "message": FAILED_MESSAGE})
 
@@ -156,7 +175,9 @@ async def chat(
 ):
     thread_id = str(data.thread_id)
     try:
-        reservation = await usage_service.reserve(client.client_id, client.ip, thread_id)
+        reservation = await usage_service.reserve(
+            client.client_id, client.ip, thread_id
+        )
     except LimitExceeded as e:
         raise _limit_error(e)
     try:
@@ -166,5 +187,29 @@ async def chat(
         return ChatResponse(answer=answer, usage=reservation.usage)
     except Exception:
         logger.exception("chat failed")
-        await usage_service.refund(client.client_id, client.ip, thread_id, reservation.new_chat)
-        raise HTTPException(status_code=500, detail={"code": "failed", "message": FAILED_MESSAGE})
+        await usage_service.refund(
+            client.client_id, client.ip, thread_id, reservation.new_chat
+        )
+        raise HTTPException(
+            status_code=500, detail={"code": "failed", "message": FAILED_MESSAGE}
+        )
+
+
+@router.post(
+    "/index/document",
+    response_model=IndexResposne,
+    dependencies=[Depends(require_admin)],
+)
+async def index_document(
+    data: IndexDocumentRequest, vector_service: vector_service_dependency
+):
+    docs = [
+        {"text": c.text, "metadata": {**c.metadata, "source": data.source}}
+        for c in data.chunks
+    ]
+    try:
+        await vector_service.replace_source(data.source, docs)
+    except Exception:
+        logger.exception("Document indexing failed (source=%s)", data.source)
+        raise HTTPException(status_code=500, detail="indexing failed")
+    return IndexResposne(status="success", message=f"{len(docs)} chunks indexed")

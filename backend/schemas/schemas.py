@@ -4,26 +4,41 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 
+class IndexChunk(BaseModel):
+    text: str = Field(min_length=1, max_length=20_000)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class IndexDocumentRequest(BaseModel):
+    source: str = Field(min_length=1, max_length=500)
+    chunks: list[IndexChunk] = Field(default_factory=list, max_length=1000)
+
+
 class IndexRequest(BaseModel):
     text: str
     source: str = "manual_input"
     metadata: dict[str, Any] | None = Field(default_factory=dict)
 
+
 class IndexResposne(BaseModel):
     status: str
     message: str
 
+
 class QueryRequest(BaseModel):
     query: str
     limit: int = 3
+
 
 class SearchResponse(BaseModel):
     status: str
     message: str
     results: list
 
+
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
+
 
 class AskResponse(BaseModel):
     thought_process: str = Field(
@@ -34,6 +49,7 @@ class AskResponse(BaseModel):
     )
     answer: str
     sources: list[str]
+
 
 class FactCheckingAnswer(BaseModel):
     thought_process: str = Field(
@@ -47,11 +63,16 @@ class FactCheckingAnswer(BaseModel):
     )
     used_sources: list[str] = Field(
         default_factory=list,
-        description="The list of names of the files used as sources for the answer."
+        description="The list of names of the files used as sources for the answer.",
     )
+
+
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=1000)  # keep in sync with MAX_MESSAGE_CHARS
+    message: str = Field(
+        min_length=1, max_length=1000
+    )  # keep in sync with MAX_MESSAGE_CHARS
     thread_id: UUID  # one thread = one chat; the id is created by the client
+
 
 class UsageInfo(BaseModel):
     questions_used: int

@@ -90,3 +90,34 @@ class VectorStoreService:
             {"score": s, "text": d.page_content, "metadata": d.metadata}
             for d, s in results
         ]
+
+    async def replace_source(
+        self, source: str, documents: list[dict[str, Any]]
+    ) -> None:
+        """
+        All chunks of one note at once: upsert the new ones, than delete what is no longer there.
+        Updert BEFORE delete: if embedding fails, the old version stays searchable
+        """
+        ids = [self._point_id(d) for d in documents]
+        async with self._write_lock:
+            if documents:
+                await self.vector_store.aadd_documents(
+                    documents=[
+                        Document(page_content=d["text"], metadata=d["metadata"])
+                        for d in documents
+                    ],
+                    ids=ids,
+                )
+            stale = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="metadata.source", match=models.MatchValue(value=source)
+                    )
+                ],
+                must_not=[models.HasIdCondition(has_id=ids)] if ids else None,
+            )
+            await asyncio.to_thread(
+                self.qdrant_client.delete,
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(filter=stale),
+            )

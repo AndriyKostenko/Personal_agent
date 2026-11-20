@@ -9,8 +9,7 @@ import yaml
 import json
 import asyncio
 from httpx import AsyncClient, HTTPError
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-
+from pipeline.chunker import MarkdownChunker
 from core.settings import Settings
 import shutil
 from urllib.parse import unquote
@@ -34,10 +33,9 @@ class FileProcessingManager:
         self.api_url = getattr(
             self.settings, "INDEX_API_URL", "http://127.0.0.1:8000/api/v1/index"
         )
+        self.index_document_url = self.settings.INDEX_DOCUMENT_API_URL
 
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000, chunk_overlap=150, separators=["\n\n", "\n", " ", ""]
-        )
+        self.chunker = MarkdownChunker(chunk_tokens=500, overlap_tokens=75)
         self.captioner = PhotoCaptioner(settings)
         self.media_dir = Path(settings.MEDIA_DIR)
         self.media_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +96,7 @@ class FileProcessingManager:
                 try:
                     parsed_yaml = yaml.safe_load(yaml_content)
                     if isinstance(parsed_yaml, dict):
-                        metadata = parsed_yaml
+                        metadata = json.loads(json.dumps(parsed_yaml, default=str))
                 except yaml.YAMLError as e:
                     print(f"YAML parsing error in {file_path.name}: {e}")
 
@@ -111,25 +109,24 @@ class FileProcessingManager:
         text_content = IMG_RE.sub("", text_content)
 
         # 3. Splitting the text
-        chunks = self.text_splitter.split_text(text_content)
+        chunks = self.chunker.split(text_content, title=file_path.stem)
 
-        # 4. Sending to API
-        success = True
-        for index, chunk in enumerate(chunks):
-            payload = {
-                "text": chunk,
-                "source": file_path.name,
-                "metadata": {**metadata, "chunk_index": index},
-            }
-            try:
-                response = await client.post(url=self.api_url, json=payload)
-                response.raise_for_status()
-                print(
-                    f"File {file_path.name} | Chunk {index + 1}/{len(chunks)} sent successfully"
-                )
-            except HTTPError as e:
-                print(f"Error sending chunk {index} for {file_path.name}: {e}")
-                success = False
+        # 4. Sending to API - one reauest per note
+        paylaod = {
+            "source": file_key,
+            "chunks": [
+                {"text": c.text, "metadata": {**metadata, **c.metadata}} for c in chunks
+            ],
+        }
+        try:
+            (
+                await client.post(self.index_document_url, json=paylaod)
+            ).raise_for_status()
+            print(f"File {file_key}: {len(chunks)} chunks indexed")
+            success = True
+        except HTTPError as error:
+            print(f"Error indexing {file_key}: {error}")
+            success = False
 
         if success and images_ok:
             self.sync_state[file_key] = current_hash
@@ -238,6 +235,7 @@ class FileProcessingManager:
 
         print(f"Found {len(md_files)} markdown files. Starting sync...")
 
+        current = {str(p.relative_to(self.knowledge_path)) for p in md_files}
         # creating a semaphore to limit concurrent requests
         semaphore = asyncio.Semaphore(5)
 
@@ -246,13 +244,30 @@ class FileProcessingManager:
                 await self.process_file(file_path, client)
 
         # using one client only (Connection Pooling)
-        headers = {"X-Admin-Key": self.settings.ADMIN_API_KEY} if self.settings.ADMIN_API_KEY else {}
+        headers = (
+            {"X-Admin-Key": self.settings.ADMIN_API_KEY}
+            if self.settings.ADMIN_API_KEY
+            else {}
+        )
         async with AsyncClient(timeout=30.0, headers=headers) as client:
             tasks = [
                 process_file_with_semaphore(file_path, client) for file_path in md_files
             ]
             await asyncio.gather(*tasks)
             await self.process_photo_folders(client)
+            removed = [
+                k
+                for k in self.sync_state
+                if not k.startswith("img:") and k not in current
+            ]
+            for key in removed:
+                r = await client.post(
+                    self.index_document_url, json={"source": key, "chunks": []}
+                )
+                if r.is_success:
+                    self.sync_state.pop(key)
+                    print(f"Removed deleted note: {key}")
+            self._save_state()
 
 
 if __name__ == "__main__":
