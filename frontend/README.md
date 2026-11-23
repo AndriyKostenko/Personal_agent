@@ -16,15 +16,22 @@ npm run type-check
 - `src/lib/streamBuffer.ts`: incoming tokens go here, not into React state
 - `src/hooks/useSmoothText.ts`: reveals the streamed text once per animation frame at an adaptive speed
 - `src/components/Markdown.tsx` + `src/lib/markdown.ts`: Markdown split into memoised blocks; only the last block re-renders while streaming; DOMPurify + image/link hook
+- `src/lib/fade.ts`: fade-in of newly typed words
 - `src/hooks/useStickToBottom.ts`: auto-scroll only while the reader is at the bottom
 - `src/lib/binaryPortrait.ts`: the canvas portrait (framework-free)
 
 ## How streaming is rendered
 
 1. Tokens are appended to a `StreamBuffer` (no re-render per token).
-2. `useSmoothText` wakes on new text and moves the visible text towards it once per `requestAnimationFrame`,
-   at `max(90, backlog / 0.25s)` chars/s: steady ~250 ms lag, bursts spread over several frames, no idle frames.
+2. `useSmoothText` wakes on new text and moves the visible text towards it once per `requestAnimationFrame`
+   at a reading pace (`MAX_CPS` = 130 chars/s while the model writes, 220 after it has finished), letting the
+   visible text fall behind a fast model by at most `MAX_LAG_S` = 12 s. Bursts are spread over many frames;
+   no frames run while there is nothing new. Tune the speed with those constants.
 3. `Markdown` lexes the text into top-level blocks; finished blocks are `memo`ised (parsed, sanitised and
    highlighted once), only the tail block is rewritten, without syntax highlighting and with half-typed
    links / emphasis markers hidden.
-4. Stop aborts the `fetch`; the server sees the disconnect and cancels the LLM call.
+4. Newly revealed words fade in from a slight blur (`lib/fade.ts`, 500 ms). The tail block is rebuilt every
+   frame, so each young word gets a span with a negative `animation-delay` equal to its age: the fade
+   continues across re-renders instead of restarting. Words older than 500 ms stay plain text nodes.
+   Stored answers (after a reload) never animate; `prefers-reduced-motion` turns the fade off.
+5. Stop aborts the `fetch`; the server sees the disconnect and cancels the LLM call.

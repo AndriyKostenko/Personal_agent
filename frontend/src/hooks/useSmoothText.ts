@@ -14,13 +14,15 @@ import type { StreamBuffer } from '../lib/streamBuffer'
 // - a slow model: the text follows it closely (backlog / DRAIN_S), bursts spread over frames;
 // - a fast model (gpt-4o-mini sends ~1000+ chars/s): the text is typed at a reading pace
 //   (MAX_CPS) and the visible part falls behind the stream;
-// - but never more than ~MAX_LAG_S behind: a long answer speeds up instead of typing on for
-//   ages after the model has finished. After the end the cap is DONE_MAX_CPS.
+// - but never more than ~MAX_LAG_S behind: a very long answer speeds up instead of typing on
+//   for ages after the model has finished. After the end the cap is DONE_MAX_CPS.
+// With gpt-4o-mini: a 1800-char answer types in ~9.5 s, a 4200-char one in ~20 s (~190 chars/s).
+// Slower / faster: lower / raise MAX_CPS and DONE_MAX_CPS (MAX_LAG_S bounds the long answers).
 const DRAIN_S = 0.5 // how quickly a small backlog is caught up
-const MIN_CPS = 60 // never slower than this (the last few characters before a pause)
-const MAX_CPS = 320 // reading pace while the model is still writing (~5 chars per frame at 60 Hz)
-const DONE_MAX_CPS = 600 // the stream has ended: finish faster, still smoothly
-const MAX_LAG_S = 3 // the visible text never lags more than ~3 s behind what has arrived
+const MIN_CPS = 50 // never slower than this (the last few characters before a pause)
+const MAX_CPS = 130 // reading pace while the model is still writing (~2 chars per frame at 60 Hz)
+const DONE_MAX_CPS = 220 // the stream has ended: finish a bit faster, still smoothly
+const MAX_LAG_S = 12 // the visible text never lags more than ~12 s behind what has arrived
 const MAX_DT_S = 0.1 // a frame after a long pause (a hidden tab) counts as at most 100 ms
 const WORD_SNAP = 10 // finish the current word if it ends within this many characters
 

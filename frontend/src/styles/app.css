@@ -601,6 +601,23 @@ body {
   color: var(--muted);
 }
 
+/* a newly typed word: fades in softly, from a slight blur (lib/fade.ts; FADE_MS = 500).
+   The negative animation-delay set on each span continues the fade across re-renders. */
+.md-fade {
+  animation: md-fade 500ms ease-out both;
+}
+
+@keyframes md-fade {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+
 /* typing cursor while the answer streams */
 .markdown-content.streaming > .md-block:last-child > :last-child:not(ul, ol)::after,
 .markdown-content.streaming > .md-block:last-child > :is(ul, ol):last-child > li:last-child::after {
@@ -1012,6 +1029,9 @@ body {
     animation: none;
   }
   .steps-live li {
+    animation: none;
+  }
+  .md-fade {
     animation: none;
   }
   .steps-live li.active .step-icon {

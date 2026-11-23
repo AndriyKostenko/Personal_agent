@@ -27,7 +27,7 @@ function AssistantBubble({ msg }: { msg: AssistantMessage }) {
             </ul>
           </details>
         )}
-        <Markdown text={text} streaming={!settled} />
+        <Markdown text={text} streaming={!settled} animate={!!msg.live} />
         {msg.incomplete && settled && <p className="incomplete">[STOPPED] THE ANSWER IS INCOMPLETE</p>}
       </div>
     </div>
