@@ -1,3 +1,4 @@
+import re
 from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
@@ -276,8 +277,10 @@ class Agent:
             return f": {args['date_from']} to {args['date_to']}"
         return ""
 
-    @staticmethod
-    def _result_step(name: str, text: str) -> str:
+    SOURCE_RE = re.compile(r"^\[source: (.*)\]$", re.MULTILINE)
+
+    @classmethod
+    def _result_step(cls, name: str, text: str, query: str | None = None) -> str:
         if name == "find_photos":
             n = sum(line.startswith("- ") for line in text.splitlines())
             return f"Found {n} photo(s)" if n else "Nothing found"
@@ -294,8 +297,15 @@ class Agent:
                 if text.startswith("Booked:")
                 else "Could not book the call"
             )
-        n = text.count("[source:")
-        return f"Found {n} note fragment(s)" if n else "Nothing found"
+        # search_about_me: a top-k search ALWAYS returns k chunks (k=8 in tools.py), however
+        # weak the match, so the number of chunks says nothing. The number of distinct notes
+        # they come from does, and the query tells which of the parallel searches this was.
+        sources = cls.SOURCE_RE.findall(text)
+        about = f' for "{query}"' if query else ""
+        if not sources:
+            return f"Nothing found{about}"
+        notes = len(set(sources))
+        return f"Found {notes} note{'s' if notes != 1 else ''}{about}"
 
     async def astream_steps(
         self, message: str, thread_id: str, client_id: str, ip: str
@@ -310,6 +320,7 @@ class Agent:
 
         # stream_mode="updates": one dict {node_name: node_output} per finished node
         streamed = False  # True once answer tokens were sent to the client
+        queries: dict[str, str] = {}  # tool_call_id -> query, to label each tool result
 
         # two modes at once -> tuples (mode, payload):
         #   "messages": (token chunk, metadata) as the LLM generates text
@@ -345,6 +356,8 @@ class Agent:
                             yield {"type": "reset"}
                             streamed = False
                         for call in reply.tool_calls:
+                            if call.get("id") and call["args"].get("query"):
+                                queries[call["id"]] = call["args"]["query"]
                             label = self.TOOL_LABELS.get(call["name"], call["name"])
                             detail = self._call_detail(call["args"])
                             yield {"type": "step", "text": f"{label}{detail}"}
@@ -354,9 +367,10 @@ class Agent:
                 elif node == "tools":
                     for result in output["messages"]:
                         text = result.content if isinstance(result.content, str) else ""
+                        query = queries.get(getattr(result, "tool_call_id", ""))
                         yield {
                             "type": "step",
-                            "text": self._result_step(result.name, text),
+                            "text": self._result_step(result.name, text, query),
                         }
                     yield {"type": "step", "text": "Writing the answer"}
 

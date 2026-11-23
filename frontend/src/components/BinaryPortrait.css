@@ -1,0 +1,11 @@
+.binary-portrait {
+  width: 100%;
+}
+
+.binary-portrait canvas {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+  cursor: crosshair;
+  filter: drop-shadow(0 0 14px rgba(229, 87, 28, 0.3));
+}

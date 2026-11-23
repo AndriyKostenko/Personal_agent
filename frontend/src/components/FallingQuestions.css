@@ -1,0 +1,119 @@
+/* only where there is room beside the conversation column (780px wide) */
+.rail {
+  --w: min(210px, 100%);
+  position: fixed;
+  top: 48px; /* below the status bar */
+  bottom: 0;
+  z-index: 5;
+  width: calc((100vw - 780px) / 2 - 60px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rail.left {
+  left: 30px;
+}
+
+.rail.right {
+  right: 30px;
+}
+
+.fall {
+  position: absolute;
+  top: 0;
+  left: calc((100% - var(--w)) * var(--x));
+  width: var(--w);
+  animation: fall var(--dur) linear var(--delay) infinite;
+  will-change: transform;
+}
+
+.sway {
+  animation: sway var(--sway-dur) ease-in-out infinite alternate;
+}
+
+@keyframes fall {
+  from {
+    transform: translateY(-110px);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100vh);
+    opacity: 0;
+  }
+}
+
+@keyframes sway {
+  from {
+    transform: translateX(calc(var(--sway) * -1)) rotate(calc(var(--tilt) * -1));
+  }
+  to {
+    transform: translateX(var(--sway)) rotate(var(--tilt));
+  }
+}
+
+.fall:hover,
+.fall:hover .sway {
+  animation-play-state: paused;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 11px 30px 12px 12px;
+  text-align: left;
+  color: var(--ink);
+  background: rgba(13, 13, 13, 0.86);
+  border: 1px solid var(--line-strong);
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(6px);
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.tab:hover:not(:disabled) {
+  background: rgba(229, 87, 28, 0.1);
+  border-color: var(--orange);
+}
+
+.tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tab-tag {
+  font-family: var(--mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.18em;
+  color: var(--orange);
+}
+
+.tab-text {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ink-strong);
+}
+
+.tab-arrow {
+  position: absolute;
+  top: 9px;
+  right: 11px;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--orange);
+}
+
+@media (max-width: 1199px), (prefers-reduced-motion: reduce) {
+  .rail {
+    display: none;
+  }
+}

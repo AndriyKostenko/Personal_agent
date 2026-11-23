@@ -1,15 +1,11 @@
 import { fileURLToPath, URL } from 'node:url'
 
+import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    vue(),
-    vueDevTools(),
-  ],
+  plugins: [react()],
   build: {
     // Small files are inlined into the CSS as data: URIs by default. The Content-Security-Policy of
     // the nginx image allows fonts only from the own origin, so fonts must stay separate files.

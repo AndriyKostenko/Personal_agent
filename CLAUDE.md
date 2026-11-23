@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-"AI Obsidian Mentor": a RAG app that answers questions from an Obsidian vault. Monorepo with a FastAPI backend (`backend/`, Python 3.14, managed with `uv`) and a Vue 3 + Vite + TypeScript frontend (`frontend/`). No tests or linters are configured.
+"AI Obsidian Mentor": a RAG app that answers questions from an Obsidian vault. Monorepo with a FastAPI backend (`backend/`, Python 3.14, managed with `uv`) and a React 19 + Vite + TypeScript frontend (`frontend/`). No tests or linters are configured.
 
 ## Commands
 
@@ -18,7 +18,7 @@ Frontend (run from `frontend/`):
 
 ## Architecture
 
-Flow: Obsidian `.md` files → `pipeline/sync_notes.py` → `POST /api/v1/index` → embeddings → local Qdrant → `POST /api/v1/ask_mentor` → Vue chat UI (`frontend/src/App.vue`, single component, calls the URL in `frontend/.env` `BACKEND_ASK_API`).
+Flow: Obsidian `.md` files → `pipeline/sync_notes.py` → `POST /api/v1/index` → embeddings → local Qdrant → `POST /api/v1/ask_mentor` → React chat UI (`frontend/src/App.tsx`; the SSE request lives in `frontend/src/hooks/useChat.ts` and calls `POST {VITE_API_BASE}/chat/stream`; streamed text is revealed by `hooks/useSmoothText.ts` and rendered as memoised Markdown blocks, see `frontend/README.md`).
 
 Backend layers: `routes/routes.py` (endpoints: `/index`, `/search`, `/ask_mentor`) → `dependencies/dependencies.py` (DI; `VectorStoreService` is a module-level singleton because embedded Qdrant allows only one client per storage path) → `services/`:
 - `vector_service.py`: embedded Qdrant (`QdrantClient(path=...)`, no server), collection `knowledge_base`, 1536-dim cosine. Embeddings via OpenRouter `openai/text-embedding-3-small` over raw httpx. Each `add_documents` call embeds one text and upserts with a random UUID (no upsert-by-key).

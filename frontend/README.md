@@ -1,42 +1,30 @@
 # frontend
 
-This template should help get you started developing with Vue 3 in Vite.
-
-## Recommended IDE Setup
-
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
+React 19 + Vite + TypeScript chat UI for AgentAndriy.
 
 ```sh
 npm install
+npm run dev        # http://localhost:5173, API from VITE_API_BASE (default http://127.0.0.1:8000/api/v1)
+npm run build      # type-check + production build
+npm run type-check
 ```
 
-### Compile and Hot-Reload for Development
+## Layout
 
-```sh
-npm run dev
-```
+- `src/hooks/useChat.ts`: the conversation, the SSE request to `/chat/stream`, Stop, limits, saving to localStorage
+- `src/lib/sse.ts`: SSE frame parser over `fetch` (POST with a JSON body, which EventSource can't send)
+- `src/lib/streamBuffer.ts`: incoming tokens go here, not into React state
+- `src/hooks/useSmoothText.ts`: reveals the streamed text once per animation frame at an adaptive speed
+- `src/components/Markdown.tsx` + `src/lib/markdown.ts`: Markdown split into memoised blocks; only the last block re-renders while streaming; DOMPurify + image/link hook
+- `src/hooks/useStickToBottom.ts`: auto-scroll only while the reader is at the bottom
+- `src/lib/binaryPortrait.ts`: the canvas portrait (framework-free)
 
-### Type-Check, Compile and Minify for Production
+## How streaming is rendered
 
-```sh
-npm run build
-```
+1. Tokens are appended to a `StreamBuffer` (no re-render per token).
+2. `useSmoothText` wakes on new text and moves the visible text towards it once per `requestAnimationFrame`,
+   at `max(90, backlog / 0.25s)` chars/s: steady ~250 ms lag, bursts spread over several frames, no idle frames.
+3. `Markdown` lexes the text into top-level blocks; finished blocks are `memo`ised (parsed, sanitised and
+   highlighted once), only the tail block is rewritten, without syntax highlighting and with half-typed
+   links / emphasis markers hidden.
+4. Stop aborts the `fetch`; the server sees the disconnect and cancels the LLM call.
