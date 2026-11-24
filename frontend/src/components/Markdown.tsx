@@ -32,7 +32,7 @@ const Block = memo(function Block({ md, highlight, fade, record }: BlockProps) {
 
 interface Props {
   text: string
-  /** the text is still being revealed (the typing cursor, no highlighting in the last block) */
+  /** the text is still being revealed (no highlighting in the last block) */
   streaming?: boolean
   /** new words fade in (only for an answer that is typed out live, never for a stored one) */
   animate?: boolean

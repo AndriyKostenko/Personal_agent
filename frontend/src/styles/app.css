@@ -618,21 +618,6 @@ body {
   }
 }
 
-/* typing cursor while the answer streams */
-.markdown-content.streaming > .md-block:last-child > :last-child:not(ul, ol)::after,
-.markdown-content.streaming > .md-block:last-child > :is(ul, ol):last-child > li:last-child::after {
-  content: '█';
-  margin-left: 3px;
-  color: var(--orange);
-  animation: blink 0.9s steps(2, start) infinite;
-}
-
-@keyframes blink {
-  to {
-    visibility: hidden;
-  }
-}
-
 /* ───────────── agent steps ───────────── */
 .steps-live ul,
 .steps-done ul {
