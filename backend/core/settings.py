@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     MAX_MESSAGE_CHARS: int = 1000
     # SQLite file with the counters: mount a persistent volume here when running in Docker
     USAGE_DB_PATH: str = str(BACKEND_DIR / "data" / "usage.db")
+    # the agent's chat memory (LangGraph checkpoints); Docker: /data/checkpoints.db (Dockerfile)
+    CHECKPOINT_DB_PATH: str = str(BACKEND_DIR / "data" / "checkpoints.db")
+    # a chat's memory is deleted after this many days without a question (services/chat_memory.py)
+    CHAT_MEMORY_TTL_DAYS: int = 7
     # How many reverse proxies sit in front of the app and append to X-Forwarded-For
     # (0 = none: the socket address is used and the header is ignored, so it cannot be spoofed).
     TRUSTED_PROXY_COUNT: int = 0

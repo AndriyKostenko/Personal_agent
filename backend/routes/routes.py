@@ -30,6 +30,7 @@ from schemas.schemas import (
     IndexDocumentRequest,
     FeedbackRequest,
 )
+from services.chat_memory import thread_key
 from services.usage_service import LimitExceeded
 
 # the module name ("routes.routes"), like every other module: one naming rule for the whole app
@@ -149,7 +150,7 @@ async def chat_stream(
         raise _limit_error(e)
 
     # the agent's memory is keyed by visitor + chat, so nobody can read another visitor's thread
-    thread_key = f"{client.client_id}:{thread_id}"
+    memory_key = thread_key(client.client_id, thread_id)
 
     async def events():
         # the body is iterated by Starlette in a task created after this function returned;
@@ -160,7 +161,7 @@ async def chat_stream(
         answered = False
         try:
             async for event in agent.astream_steps(
-                data.message, thread_key, client.client_id, client.ip, run_id=run_id
+                data.message, memory_key, client.client_id, client.ip, run_id=run_id
             ):
                 if event["type"] == "answer":
                     # BEFORE the answer reaches the browser: a fast click on 👍 must find the row
@@ -207,7 +208,7 @@ async def chat(
         started = time.perf_counter()
         answer = await agent.ainvoke(
             data.message,
-            f"{client.client_id}:{thread_id}",
+            thread_key(client.client_id, thread_id),
             client.client_id,
             client.ip,
             run_id=run_id,

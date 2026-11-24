@@ -11,7 +11,9 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Durability
 
 from agent.guardrails import GuardRails
 from services.calendar_service import CalendarService
@@ -23,6 +25,13 @@ from agent.tools import build_tools
 
 # the request_id of every line comes from core/log_config.py (set once by the route)
 log = logging.getLogger(__name__)
+
+# When the checkpointer saves: "exit" = once per run (after the final node), not after every
+# step. A question is ~7 steps, and every save stores a FULL copy of the messages: measured on
+# 10 questions with 3 searches each, the memory of one chat is 2.5 MB instead of 9.6 MB.
+# The price: a run that crashes in the middle is not saved, so that question is simply not in
+# the history (fine for a chat; an interrupt() still saves, the run exits there).
+DURABILITY: Durability = "exit"
 
 # ─────────────────────────────  GRAPH  ─────────────────────────────
 #
@@ -194,6 +203,7 @@ class Agent:
         vector_service: VectorStoreService,
         calendar_service: CalendarService | None = None,
         usage_service: UsageService | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
     ):
         self.settings = settings
         self.calendar_service = calendar_service
@@ -212,7 +222,14 @@ class Agent:
         self.llm_with_tools = llm.bind_tools(self.tools)
         self.booking_enabled = any(t.name == "book_call" for t in self.tools)
         self.classifier = llm.with_structured_output(Intent)
-        self.graph = self._build_graph()
+        # in memory until the API attaches the persistent one (main.py: lifespan); the eval and
+        # scripts keep the in-memory one, so their threads never reach the production database
+        self.graph = self._build_graph(checkpointer or InMemorySaver())
+
+    def use_checkpointer(self, checkpointer: BaseCheckpointSaver) -> None:
+        """Rebuild the graph with another checkpointer. AsyncSqliteSaver can only be created
+        inside a running event loop, so the API calls this at start-up, before any request."""
+        self.graph = self._build_graph(checkpointer)
 
     # ---- nodes: state -> partial state update ----
 
@@ -285,7 +302,7 @@ class Agent:
 
     # ----- assembly ---------
 
-    def _build_graph(self):
+    def _build_graph(self, checkpointer: BaseCheckpointSaver):
         graph = StateGraph(State)
         graph.add_node("classify", self.classify)
         graph.add_node("agent", self.call_model)
@@ -306,9 +323,8 @@ class Agent:
         graph.add_edge("guard_output", END)  # the checked answer ends the run
         graph.add_edge("refuse", END)
 
-        return graph.compile(
-            checkpointer=InMemorySaver()
-        )  # memory for the dialog by thread id
+        # the memory of a dialog, by thread id (services/chat_memory.py: where and how long)
+        return graph.compile(checkpointer=checkpointer)
 
     # ----- public API -------
 
@@ -380,7 +396,7 @@ class Agent:
         state_in, config = self._run_args(
             message, thread_id, client_id, ip, run_id=run_id
         )
-        result = await self.graph.ainvoke(state_in, config=config)
+        result = await self.graph.ainvoke(state_in, config=config, durability=DURABILITY)
         return result["messages"][-1].content
 
     @staticmethod
@@ -455,7 +471,10 @@ class Agent:
         #   "messages": (token chunk, metadata) as the LLM generates text
         #   "updates":  {node_name: node_output} when a node has finished
         async for mode, payload in self.graph.astream(
-            state_in, config=config, stream_mode=["updates", "messages"]
+            state_in,
+            config=config,
+            stream_mode=["updates", "messages"],
+            durability=DURABILITY,
         ):
             if mode == "messages":
                 chunk, meta = payload

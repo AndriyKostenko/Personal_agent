@@ -31,6 +31,11 @@ services:
       context: ./backend
     image: ai-mentor-backend:local
     restart: unless-stopped
+    # RAM cap (about 230 MB right after start). A leak or a flood of chats then kills and
+    # restarts only this container, never caddy/nginx or the whole VM through the host OOM killer.
+    # memswap_limit = mem_limit: no extra swap on top of the cap.
+    mem_limit: ${BACKEND_MEM_LIMIT:-1g}
+    memswap_limit: ${BACKEND_MEM_LIMIT:-1g}
     environment:
       OPEN_ROUTER_API_KEY: ${OPEN_ROUTER_API_KEY:?Set OPEN_ROUTER_API_KEY in .env}
       OPENROUTER_API_URL: ${OPENROUTER_API_URL:-https://openrouter.ai/api/v1}
@@ -67,6 +72,8 @@ services:
       LANGSMITH_AGENT_ENVIRONMENT: ${LANGSMITH_AGENT_ENVIRONMENT:-production}
       # Python log level of the API (backend/core/log_config.py): DEBUG | INFO | WARNING | ERROR
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # the agent's chat memory (SQLite in /data) is deleted after this many days without activity
+      CHAT_MEMORY_TTL_DAYS: ${CHAT_MEMORY_TTL_DAYS:-7}
     volumes:
       - appdata:/data
     expose:
