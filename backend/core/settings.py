@@ -23,6 +23,8 @@ class Settings(BaseSettings):
         Path(__file__).resolve().parent.parent / "media"
     )  # не зависит от cwd
     MEDIA_BASE_URL: str = "http://127.0.0.1:8000/media"
+    # the agent's LLM (answers + in/out-of-scope classifier); any OpenRouter model with tool calling
+    AGENT_MODEL: str = "anthropic/claude-haiku-5.5"
     VALIDATION_MODEL: str = "openai/gpt-6-luna"
     VISION_MODEL: str = "openai/gpt-4o-mini"  # любая vision-модель OpenRouter
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]

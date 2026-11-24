@@ -13,11 +13,13 @@ from services.vector_service import VectorStoreService
 log = logging.getLogger(__name__)
 
 
-MIN_PHOTO_SCORE = 0.3 # the accuracy of the related fotos 
+MIN_PHOTO_SCORE = 0.3  # the accuracy of the related fotos
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_SLOTS_PER_DAY = 4  # spread over the day; keeps the tool result short for the model
-CALENDAR_DOWN = "The calendar is temporarily unavailable. Tell the visitor to try again later."
+CALENDAR_DOWN = (
+    "The calendar is temporarily unavailable. Tell the visitor to try again later."
+)
 
 
 def _spread(items: list, n: int) -> list:
@@ -29,7 +31,9 @@ def _spread(items: list, n: int) -> list:
 
 def _clean(text: str, limit: int) -> str:
     """Single-line, control-free, length-limited text for the event (the values come from the LLM)."""
-    return " ".join("".join(c for c in text if c.isprintable() or c.isspace()).split())[:limit]
+    return " ".join("".join(c for c in text if c.isprintable() or c.isspace()).split())[
+        :limit
+    ]
 
 
 def build_tools(
@@ -49,7 +53,10 @@ def build_tools(
         results = await vector_service.search(query, limit=8)
         if not results:
             return "Nothing found"
-        return "\n\n---\n\n".join(f"[source: {r['metadata'].get('source')}]\n{r['text']}" for r in results)
+        body = "\n\n---\n\n".join(
+            f"[source: {r['metadata'].get('source')}]\n{r['text']}" for r in results
+        )
+        return f"<notes>\n{body}\n</notes>"
 
     @tool
     async def find_photos(query: str) -> str:
@@ -59,11 +66,10 @@ def build_tools(
         results = await vector_service.search(query, limit=8, only_images=True)
         lines = [
             f"- {r['metadata']['image_url']} | {r['text'].splitlines()[0]}"
-            for r in results 
+            for r in results
             if r["score"] >= MIN_PHOTO_SCORE
         ]
         return "\n".join(lines) or "No photos found"
- 
 
     tools = [search_about_me, find_photos]
     if calendar_service is None or usage_service is None:
@@ -96,13 +102,16 @@ def build_tools(
         for slot in slots:
             by_day[slot.date()].append(slot)
         lines = [
-            f"- {day:%a %Y-%m-%d}: " + ", ".join(s.isoformat() for s in _spread(day_slots, MAX_SLOTS_PER_DAY))
+            f"- {day:%a %Y-%m-%d}: "
+            + ", ".join(s.isoformat() for s in _spread(day_slots, MAX_SLOTS_PER_DAY))
             for day, day_slots in by_day.items()
         ]
         return header + "\n" + "\n".join(lines)
 
     @tool
-    async def book_call(start: str, name: str, email: str, topic: str, config: RunnableConfig) -> str:
+    async def book_call(
+        start: str, name: str, email: str, topic: str, config: RunnableConfig
+    ) -> str:
         """Book a call with Andriy and send the visitor a calendar invite. Call it ONLY after
         the visitor has explicitly confirmed the time, name and e-mail. `start` must be an exact
         ISO timestamp returned by check_availability."""

@@ -22,7 +22,7 @@ from services.vector_service import VectorStoreService
 HERE = Path(__file__).resolve().parent
 JUDGE_MODEL = (
     settings.VALIDATION_MODEL
-)  # stronger than the agent's gpt-4o-mini: a model should not grade itself
+)  # not the agent's AGENT_MODEL: a model should not grade itself
 THRESHOLDS = {"rules_pass_rate": 0.90, "faithfulness": 4.0, "relevance": 4.0}
 # one failure in these types fails the run: averages hide a single hallucination or a missed refusal
 CRITICAL_TYPES = {"out_of_scope", "no_answer", "partial"}
@@ -30,14 +30,36 @@ SOURCE_RE = re.compile(r"\[source: ([^\]]+)\]")
 CODE_RE = re.compile(r"```[\w+-]*\n(.*?)```", re.S)
 URL_RE = re.compile(r"https?://[^\s)\]>\"']+")
 CYR_RE = re.compile(r"[А-Яа-яЁёІіЇїЄєҐґ]")
+# phrases that admit missing info, matched on the lowercased answer ("n't x" covers doesn't/don't)
 NO_INFO = (
     "don't have",
     "do not have",
     "not cover",
+    "n't cover",
     "no information",
-    "doesn't cover",
     "not mention",
+    "n't mention",
+    "not contain",
+    "n't contain",
+    "not provide",
+    "n't provide",
+    "not include",
+    "n't include",
+    "nothing about",
+    "no details",
+    "no mention",
 )
+
+
+BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
+# `//`, `#` or `--` that starts a comment: at line start or after whitespace, followed by a space
+# or the end of the line (so `http://x`, `#include`, `a--` and `x#y` are left alone)
+LINE_COMMENT_RE = re.compile(r"(?m)(?:^|(?<=\s))(?://|#|--)(?=\s|$).*$")
+
+
+def _strip_comments(s: str) -> str:
+    """Code without comments: the agent answers in English and may translate comments."""
+    return LINE_COMMENT_RE.sub("", BLOCK_COMMENT_RE.sub("", s))
 
 
 def _squash(s: str) -> str:
@@ -100,12 +122,15 @@ def rule_checks(
         )
     for term in row.get("must_include", []):
         checks[f"has:{term}"] = term.lower() in answer.lower()
-    # code must be copied from the notes, not translated or rewritten (whitespace is ignored;
+    # code must be copied from the notes, not rewritten (whitespace and comments are ignored:
+    # comments may be translated to English; string literals and statements must still match;
     # a block split between two chunks can give a false failure: check those by hand)
     blocks = [b for b in CODE_RE.findall(answer) if b.strip()]
     if blocks:
-        ctx = _squash(context)
-        checks["code_verbatim"] = all(_squash(b) in ctx for b in blocks)
+        ctx = _squash(_strip_comments(context))
+        checks["code_verbatim"] = all(
+            _squash(_strip_comments(b)) in ctx for b in blocks
+        )
     # every URL in the answer must come from a tool result: no invented images or links
     checks["no_invented_urls"] = all(u in context for u in URL_RE.findall(answer))
     # the prompt says "ALWAYS answer in English" (code blocks are removed before counting)
@@ -180,6 +205,12 @@ async def main() -> int:
         for line in (HERE / "dataset.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+    # optional case ids on the command line: re-run only those (cheap check after a prompt fix)
+    if only := set(sys.argv[1:]):
+        rows = [r for r in rows if r["id"] in only]
+        if missing := only - {r["id"] for r in rows}:
+            print(f"unknown case ids: {sorted(missing)}")
+            return 2
     # booking is NOT passed: the eval must never create real calendar events
     agent = Agent(settings, VectorStoreService(settings.COLLECTION_NAME, settings))
     judge = ChatOpenAI(

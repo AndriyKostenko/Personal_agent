@@ -58,6 +58,7 @@ services:
       MAX_BOOKINGS_PER_IP: ${MAX_BOOKINGS_PER_IP:-2}
       MAX_BOOKINGS_PER_DAY: ${MAX_BOOKINGS_PER_DAY:-10}
       COLLECTION_NAME: ${COLLECTION_NAME:-}
+      AGENT_MODEL: ${AGENT_MODEL:-anthropic/claude-haiku-5.5}
       # LangSmith tracing (backend/core/tracing.py): off unless enabled and a key is set
       LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
