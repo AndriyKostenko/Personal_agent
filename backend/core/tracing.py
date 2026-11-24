@@ -9,9 +9,11 @@ import os
 import re
 from functools import lru_cache
 from typing import Any
+from uuid import UUID
 
 from langchain_core.tracers.langchain import LangChainTracer
 from langsmith import Client
+from langsmith.address import agent_address
 
 from core.settings import settings
 
@@ -73,6 +75,28 @@ def _client() -> Client:
 def tracer_callbacks() -> list:
     """Put into a run's config["callbacks"]. A fresh tracer per run (it keeps per-run state)."""
     return [LangChainTracer(client=_client())] if tracing_enabled() else []
+
+
+def send_feedback(run_id: UUID, score: int, comment: str | None = None) -> None:
+    """A visitor's 👍/👎 on a traced run (key "user-score"). Blocking HTTP: call it via
+    asyncio.to_thread. Does nothing when tracing is off (the rating stays in the usage DB)."""
+    if not tracing_enabled():
+        return
+    kwargs: dict[str, Any] = {}
+    if settings.LANGSMITH_AGENT_ID and settings.LANGSMITH_AGENT_ENVIRONMENT:
+        # traces go to an agent environment, and feedback is never routed by the env vars:
+        # it needs the same address, or LangSmith can not find the run
+        kwargs["address"] = agent_address(
+            settings.LANGSMITH_AGENT_ID, settings.LANGSMITH_AGENT_ENVIRONMENT
+        )
+    _client().create_feedback(
+        run_id,
+        key="user-score",
+        score=score,
+        # the anonymizer covers runs, not feedback: a visitor may type an e-mail here
+        comment=scrub(comment) if comment else None,
+        **kwargs,
+    )
 
 
 def flush_traces() -> None:

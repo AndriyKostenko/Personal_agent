@@ -60,11 +60,13 @@ services:
       COLLECTION_NAME: ${COLLECTION_NAME:-}
       AGENT_MODEL: ${AGENT_MODEL:-anthropic/claude-haiku-5.5}
       # LangSmith tracing (backend/core/tracing.py): off unless enabled and a key is set
-      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
       LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
       LANGSMITH_AGENT_ID: ${LANGSMITH_AGENT_ID:-}
       LANGSMITH_AGENT_ENVIRONMENT: ${LANGSMITH_AGENT_ENVIRONMENT:-production}
+      # Python log level of the API (backend/core/log_config.py): DEBUG | INFO | WARNING | ERROR
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - appdata:/data
     expose:

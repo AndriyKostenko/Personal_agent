@@ -4,6 +4,7 @@ import type { Command, Prompt } from './types'
 export const API_BASE: string = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000/api/v1'
 export const CHAT_URL = `${API_BASE}/chat/stream`
 export const USAGE_URL = `${API_BASE}/usage`
+export const FEEDBACK_URL = `${API_BASE}/feedback`
 // the images are served by the same backend
 export const MEDIA_ORIGIN = new URL(API_BASE, window.location.href).origin
 export const MODEL_LABEL = 'gpt-4o-mini'

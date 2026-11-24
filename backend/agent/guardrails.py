@@ -24,12 +24,12 @@ class GuardRails:
     def is_injection(self, text: str) -> bool:
         return bool(self.INJECTION_RE.search(text))
 
-    def leaks_propmpt(self, answer: str) -> bool:
+    def leaks_prompt(self, answer: str) -> bool:
         low = answer.lower()
         return any(m.lower() in low for m in self.PROMPT_MARKERS)
 
     def check_answer(self, answer: str, allowed_text: str) -> tuple[str, list[str]]:
-        if self.leaks_propmpt(answer):
+        if self.leaks_prompt(answer):
             return self.LEAK_REPLY, ["prompt_leak"]
         problems = []
         for url in set(self.URL_RE.findall(answer)):

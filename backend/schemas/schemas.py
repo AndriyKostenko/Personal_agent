@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -84,3 +84,12 @@ class UsageInfo(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     usage: UsageInfo | None = None
+    run_id: str | None = None  # sent back with POST /feedback; also the LangSmith trace id
+
+
+class FeedbackRequest(BaseModel):
+    """👍/👎 on one answer. run_id comes from the answer (SSE event `answer` or ChatResponse)."""
+
+    run_id: UUID
+    score: Literal[0, 1]  # 1 = helpful, 0 = not helpful
+    comment: str | None = Field(default=None, max_length=500)

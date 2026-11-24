@@ -93,7 +93,7 @@ export default function App() {
                     <BinaryPortrait src="/hero.jpg" cellW={3.2} cellH={5} />
                   </div>
                   {messages.map((msg) => (
-                    <ChatMessage key={msg.id} msg={msg} />
+                    <ChatMessage key={msg.id} msg={msg} onFeedback={chat.sendFeedback} />
                   ))}
                 </>
               )}

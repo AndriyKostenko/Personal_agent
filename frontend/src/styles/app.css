@@ -736,6 +736,53 @@ body {
   }
 }
 
+/* 👍/👎 under a finished answer (POST /feedback) */
+.feedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.vote {
+  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.vote:hover:not(:disabled),
+.vote:focus-visible {
+  color: var(--orange);
+  border-color: var(--orange);
+  outline: none;
+}
+
+.vote:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.vote.chosen {
+  color: var(--orange);
+  border-color: var(--orange);
+  opacity: 1;
+}
+
+.thanks {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
 /* a cut-off answer (Stop, or the connection broke) */
 .incomplete {
   margin: 12px 0 0;

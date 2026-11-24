@@ -6,9 +6,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from core.log_config import setup_logging
 from core.settings import settings
-from core.tracing import flush_traces
-from routes.routes import router
+
+# BEFORE importing the routes: that import builds the agent and the vector store (dependencies.py),
+# and whatever they log while starting must already go through our handlers and format
+setup_logging(settings.LOG_LEVEL, settings.log_file_path)
+
+from core.tracing import flush_traces  # noqa: E402
+from routes.routes import router  # noqa: E402
 
 
 @asynccontextmanager

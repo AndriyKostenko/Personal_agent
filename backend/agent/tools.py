@@ -2,10 +2,11 @@ import logging
 import re
 from collections import defaultdict
 from datetime import date, datetime
-from typing import Callable
+from typing import Annotated, Callable
 
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
+from langgraph.prebuilt import InjectedState
 from services.calendar_service import BookingError, CalendarService
 from services.usage_service import LimitExceeded, UsageService
 from services.vector_service import VectorStoreService
@@ -19,6 +20,16 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_SLOTS_PER_DAY = 4  # spread over the day; keeps the tool result short for the model
 CALENDAR_DOWN = (
     "The calendar is temporarily unavailable. Tell the visitor to try again later."
+)
+# a short "yes" from the visitor (EN / RU / UA); \b works with Cyrillic in Python 3 str patterns
+YES_RE = re.compile(
+    r"\b(yes|yep|yeah|sure|ok|okay|confirm|confirmed|correct|go ahead|book it"
+    r"|да|ок|подтверждаю|верно|так|підтверджую)\b",
+    re.IGNORECASE,
+)
+NOT_CONFIRMED = (
+    "Not confirmed yet. Repeat the slot, name, e-mail and topic and ask the visitor to "
+    "confirm. Call book_call again only after they say yes."
 )
 
 
@@ -34,6 +45,25 @@ def _clean(text: str, limit: int) -> str:
     return " ".join("".join(c for c in text if c.isprintable() or c.isspace()).split())[
         :limit
     ]
+
+
+def _confirmed(messages: list, email: str) -> bool:
+    """The prompt rule "book only after an explicit yes in a LATER message", enforced in code:
+    the visitor's last message says yes, AND the agent's reply before it (between the two
+    last visitor messages) contained this e-mail, i.e. it was the booking summary."""
+    humans = [i for i, m in enumerate(messages) if m.type == "human"]
+    if len(humans) < 2:
+        return False  # the summary and the "yes" need two visitor turns at least
+    last = messages[humans[-1]].content
+    if not isinstance(last, str) or not YES_RE.search(last):
+        return False
+    between = messages[humans[-2] : humans[-1]]
+    return any(
+        m.type == "ai"
+        and isinstance(m.content, str)
+        and email.lower() in m.content.lower()
+        for m in between
+    )
 
 
 def build_tools(
@@ -110,7 +140,14 @@ def build_tools(
 
     @tool
     async def book_call(
-        start: str, name: str, email: str, topic: str, config: RunnableConfig
+        start: str,
+        name: str,
+        email: str,
+        topic: str,
+        config: RunnableConfig,
+        # injected by ToolNode from the graph state; NOT in the schema the LLM sees,
+        # so the model cannot fake the dialogue it is checked against
+        messages: Annotated[list, InjectedState("messages")],
     ) -> str:
         """Book a call with Andriy and send the visitor a calendar invite. Call it ONLY after
         the visitor has explicitly confirmed the time, name and e-mail. `start` must be an exact
@@ -127,6 +164,10 @@ def build_tools(
             return "Invalid start time. Use an exact ISO timestamp from check_availability."
         if when.tzinfo is None:
             return "The start time must include the UTC offset, exactly as check_availability returned it."
+        # before any side effect (the booking limit, the calendar event)
+        if not _confirmed(messages, email):
+            log.warning("book_call without the visitor's confirmation")
+            return NOT_CONFIRMED
         # who is asking comes from the server (the routes put it into the run config), never from the LLM
         visitor = config.get("configurable", {})
         client_id, ip = visitor.get("client_id"), visitor.get("ip")

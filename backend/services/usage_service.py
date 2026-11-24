@@ -73,6 +73,16 @@ class UsageService:
                     questions  INTEGER NOT NULL DEFAULT 0,
                     updated_at REAL)"""
             )
+            # one row per answered run: who may rate it, and the rating (NULL = not rated yet).
+            # Kept here even without LangSmith: the ratings survive a disabled tracer.
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS runs (
+                    run_id     TEXT PRIMARY KEY,
+                    client_id  TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    feedback   INTEGER,
+                    rated_at   REAL)"""
+            )
 
     # ---------- plumbing ----------
 
@@ -198,6 +208,24 @@ class UsageService:
         with self._tx() as conn:
             conn.execute("DELETE FROM bookings WHERE id = ?", (booking_id,))
 
+    def _record_run(self, run_id: str, client_id: str) -> None:
+        with self._tx() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO runs (run_id, client_id, created_at) VALUES (?, ?, ?)",
+                (run_id, client_id, time.time()),
+            )
+
+    def _claim_feedback(self, run_id: str, client_id: str, score: int) -> bool:
+        """One atomic UPDATE checks both rules: the run belongs to THIS visitor and has no rating
+        yet. A check-then-write in two queries would let two parallel requests both pass."""
+        with self._tx() as conn:
+            cursor = conn.execute(
+                """UPDATE runs SET feedback = ?, rated_at = ?
+                   WHERE run_id = ? AND client_id = ? AND feedback IS NULL""",
+                (score, time.time(), run_id, client_id),
+            )
+            return cursor.rowcount == 1
+
     # ---------- async API ----------
 
     async def get_usage(self, client_id: str) -> dict:
@@ -213,6 +241,14 @@ class UsageService:
 
     async def release_booking(self, booking_id: int) -> None:
         await asyncio.to_thread(self._release_booking, booking_id)
+
+    async def record_run(self, run_id: str, client_id: str) -> None:
+        """Remember who got this answer, so only they can rate it. Call when the answer is ready."""
+        await asyncio.to_thread(self._record_run, run_id, client_id)
+
+    async def claim_feedback(self, run_id: str, client_id: str, score: int) -> bool:
+        """Store the rating. False = not this visitor's run, unknown run, or already rated."""
+        return await asyncio.to_thread(self._claim_feedback, run_id, client_id, score)
 
     async def refund(self, client_id: str, ip: str, thread_id: str | None, new_chat: bool) -> dict:
         return await asyncio.to_thread(self._refund, client_id, ip, thread_id, new_chat)

@@ -7,6 +7,10 @@ BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
+    # ───────────── logging (core/log_config.py) ─────────────
+    LOG_LEVEL: str = "INFO"  # DEBUG | INFO | WARNING | ERROR
+    # empty = stdout only (Docker). A relative path is resolved against backend/, not the cwd.
+    LOG_FILE: str = ""
     INDEX_DOCUMENT_API_URL: str = "http://127.0.0.1:8000/api/v1/index/document"
     PROJECT_NAME: str = "AI Obsidian Mentor"
     VERSION: str = "0.1.0"
@@ -77,7 +81,17 @@ class Settings(BaseSettings):
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGSMITH_API_KEY: SecretStr = SecretStr("")
     LANGSMITH_AGENT_ID: str = ""
-    LANGSMITH_AGENT_ENVIRONMENT: str = "local"  # local | development | staging | production
+    LANGSMITH_AGENT_ENVIRONMENT: str = (
+        "local"  # local | development | staging | production
+    )
+
+    @property
+    def log_file_path(self) -> str:
+        """LOG_FILE made absolute (relative = inside backend/), or "" when file logging is off."""
+        if not self.LOG_FILE:
+            return ""
+        path = Path(self.LOG_FILE)
+        return str(path if path.is_absolute() else BACKEND_DIR / path)
 
     @property
     def booking_enabled(self) -> bool:

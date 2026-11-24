@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import sys
 from pathlib import Path
 import re
@@ -14,6 +15,9 @@ from core.settings import Settings
 import shutil
 from urllib.parse import unquote
 from pipeline.image_captioner import PhotoCaptioner
+from core.log_config import setup_logging
+
+log = logging.getLogger(__name__)
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 IMG_RE = re.compile(
@@ -50,7 +54,7 @@ class FileProcessingManager:
     def _ensure_knowledge_path(self):
         """Checking the directory."""
         if not self.knowledge_path.exists():
-            print(f"Knowledge path does not exist: {self.knowledge_path}. Creating...")
+            log.warning("Knowledge path does not exist: %s", self.knowledge_path)
             return
 
     def _load_state(self):
@@ -75,14 +79,14 @@ class FileProcessingManager:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
         except Exception as e:
-            print(f"Error reading file: {file_path}: {e}")
+            log.error("Error reading file %s: %s", file_path, e)
             return
 
         # Deduplication logic
         file_key = str(file_path.relative_to(self.knowledge_path))
         current_hash = FileProcessingManager._get_file_hash(content)
         if self.sync_state.get(file_key) == current_hash:
-            print(f"File {file_key} is already synced, skipping")
+            log.debug("File %s is already synced, skipping", file_key)  # DEBUG: one line per unchanged note
             return
 
         metadata = {}
@@ -98,7 +102,7 @@ class FileProcessingManager:
                     if isinstance(parsed_yaml, dict):
                         metadata = json.loads(json.dumps(parsed_yaml, default=str))
                 except yaml.YAMLError as e:
-                    print(f"YAML parsing error in {file_path.name}: {e}")
+                    log.warning("YAML parsing error in %s: %s", file_path.name, e)
 
                 text_content = content[yaml_end + 4 :].strip()
 
@@ -122,10 +126,10 @@ class FileProcessingManager:
             (
                 await client.post(self.index_document_url, json=paylaod)
             ).raise_for_status()
-            print(f"File {file_key}: {len(chunks)} chunks indexed")
+            log.info("File %s: %d chunks indexed", file_key, len(chunks))
             success = True
         except HTTPError as error:
-            print(f"Error indexing {file_key}: {error}")
+            log.error("Error indexing %s: %s", file_key, error)
             success = False
 
         if success and images_ok:
@@ -174,12 +178,12 @@ class FileProcessingManager:
         try:
             (await client.post(self.api_url, json=payload)).raise_for_status()
         except HTTPError as e:
-            print(f"Error indexing image {src.name}: {e}")
+            log.error("Error indexing image %s: %s", src.name, e)
             return False
 
         self.sync_state[state_key] = file_hash
         self._save_state()
-        print(f"Image {src.name} indexed")
+        log.info("Image %s indexed", src.name)
         return True
 
     async def process_images(
@@ -193,7 +197,7 @@ class FileProcessingManager:
                 continue
             src = self.image_index.get(Path(ref).name)
             if src is None:
-                print(f"Image not found: {ref} (in {note_name})")
+                log.warning("Image not found: %s (in %s)", ref, note_name)
                 continue
 
             context = text[max(0, m.start() - 300) : m.end() + 300]
@@ -207,7 +211,7 @@ class FileProcessingManager:
         for folder in self.settings.PHOTO_FOLDERS:
             root = self.knowledge_path / folder
             if not root.is_dir():
-                print(f"Photo folder not found: {root}")
+                log.warning("Photo folder not found: %s", root)
                 continue
 
             # context = the notes that lie next to the photos
@@ -230,10 +234,10 @@ class FileProcessingManager:
         md_files = list(self.knowledge_path.rglob("*.md"))
 
         if not md_files:
-            print(f"No markdown files found in {self.knowledge_path}")
+            log.warning("No markdown files found in %s", self.knowledge_path)
             return
 
-        print(f"Found {len(md_files)} markdown files. Starting sync...")
+        log.info("Found %d markdown files. Starting sync...", len(md_files))
 
         current = {str(p.relative_to(self.knowledge_path)) for p in md_files}
         # creating a semaphore to limit concurrent requests
@@ -266,11 +270,16 @@ class FileProcessingManager:
                 )
                 if r.is_success:
                     self.sync_state.pop(key)
-                    print(f"Removed deleted note: {key}")
+                    log.info("Removed deleted note: %s", key)
+                else:
+                    log.error("Could not remove deleted note %s: HTTP %d", key, r.status_code)
             self._save_state()
 
 
 if __name__ == "__main__":
     settings = Settings()
+    # stdout only, never LOG_FILE: the API may be writing that file, and two processes rotating
+    # one file lose lines
+    setup_logging(settings.LOG_LEVEL)
     manager = FileProcessingManager(settings)
     asyncio.run(manager.run())
