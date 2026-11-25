@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "specification": {
+    "path": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/candidate.json",
+    "sha256": "7aff84f15f84af2514d3af225d9812ba9de380f704175422286b404c12a86c79",
+    "bytes": 11047
+  },
+  "artifact": {
+    "path": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/personal-agent-architecture.html",
+    "sha256": "d88bafe47b62520021b0d0e3b68aa14cf1951839407f5f53d8650b99c8d10d43",
+    "bytes": 961603
+  },
+  "gates": {
+    "validate": "fail",
+    "deliver": "not-run",
+    "check": "not-run",
+    "browser-check": "not-run"
+  },
+  "failedStage": "validate",
+  "diagnostics": [
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"POST /chat/stream\" overlaps component \"spa\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [297, 172, 92, 14]\n  component \"spa\" rect: [248, 132, 191, 60]\n  Suggested fix: set labelAt [343, 206] or set labelDy 24 (below); or set labelAt [343, 124] or set labelDy -58 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      }
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"astream_steps\" overlaps component \"api\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [299, 256, 72, 14]\n  component \"api\" rect: [269, 216, 149, 60]\n  Suggested fix: set labelAt [335, 290] or set labelDy 24 (below); or set labelAt [335, 208] or set labelDy -58 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      }
+    }
+  ],
+  "diagnosticSummary": {
+    "total": 2,
+    "shown": 2,
+    "truncated": false
+  },
+  "evidence": {
+    "receipt": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/review-2/personal-agent-architecture.finalize.json",
+    "summaryReceipt": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/review-2/personal-agent-architecture.finalize-summary.json"
+  },
+  "update": {
+    "status": "current",
+    "installedVersion": "3.3.0",
+    "availableVersion": "3.3.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-11-24T00:10:40.372Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  },
+  "visualReview": "not-requested",
+  "durationMs": 458,
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "nextAction": {
+    "action": "edit-in-place",
+    "candidate": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/candidate.json",
+    "constraint": "Preserve unaffected semantics and geometry; apply each diagnostic's supportedFixes, or the fix its message names, and do not replace the whole candidate.",
+    "then": "finalize-once"
+  }
+}
