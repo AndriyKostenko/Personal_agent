@@ -51,9 +51,11 @@ function commonPrefix(a: string, b: string): number {
  * `settled` = the stream has ended and everything is visible.
  */
 export function useSmoothText(buffer: StreamBuffer | undefined, finalText: string) {
-  const [shown, setShown] = useState('')
-  const [settled, setSettled] = useState(!buffer)
-  const shownRef = useRef('')
+  // a finished answer that is mounted again (back from the main screen) is shown whole at once,
+  // not typed out a second time
+  const [shown, setShown] = useState(() => (buffer?.done ? buffer.text : ''))
+  const [settled, setSettled] = useState(() => !buffer || buffer.done)
+  const shownRef = useRef(shown)
 
   useEffect(() => {
     if (!buffer) return

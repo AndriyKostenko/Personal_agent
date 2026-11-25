@@ -176,6 +176,24 @@ body {
   color: var(--ink);
 }
 
+/* "CHAT ↩" in the top bar: shown on the main screen while a conversation is saved */
+.stat-btn {
+  padding: 3px 8px;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--orange);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.stat-btn:hover,
+.stat-btn:focus-visible {
+  color: var(--orange);
+  outline: none;
+}
+
 .dot {
   display: inline-block;
   width: 7px;
@@ -367,6 +385,31 @@ body {
 .card:hover:not(:disabled) .arrow {
   color: var(--orange);
   transform: translate(2px, -2px);
+}
+
+/* the way back from the main screen to the saved conversation */
+.resume {
+  margin: -10px 0 22px;
+  padding: 8px 16px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  color: var(--orange);
+  background: rgba(229, 87, 28, 0.06);
+  border: 1px solid var(--orange);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.resume:hover,
+.resume:focus-visible {
+  background: rgba(229, 87, 28, 0.16);
+  outline: none;
+}
+
+.resume .dim {
+  color: var(--muted);
 }
 
 /* messages */
