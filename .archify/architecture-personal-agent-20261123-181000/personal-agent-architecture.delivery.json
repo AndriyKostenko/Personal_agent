@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "fd95e0b2-7eb0-42ae-9a96-538395d58af4",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/candidate.json",
+  "output": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/personal-agent-architecture.html",
+  "specification": {
+    "sha256": "9d29240109d9e2eaf6281c1b162198a8b4d92fc15fe37cbacfb2590684fe8d26",
+    "bytes": 9286
+  },
+  "artifact": {
+    "sha256": "d88bafe47b62520021b0d0e3b68aa14cf1951839407f5f53d8650b99c8d10d43",
+    "bytes": 961603
+  }
+}

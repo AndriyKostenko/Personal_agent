@@ -20,9 +20,15 @@ export interface AssistantMessage {
   steps: string[]
   /** the stream was cut off (Stop button or a broken connection): the text is partial */
   incomplete?: boolean
+  /** the server's id of this answer (also the LangSmith trace id); needed to rate it */
+  runId?: string
+  /** the visitor's rating: 1 = helpful, 0 = not helpful (one vote per answer) */
+  feedback?: FeedbackScore
   /** only while the answer is streaming; never saved */
   live?: StreamBuffer
 }
+
+export type FeedbackScore = 0 | 1
 
 export interface ErrorMessage {
   id: string
@@ -37,7 +43,7 @@ export type ChatEvent =
   | { type: 'step'; text: string }
   | { type: 'token'; text: string }
   | { type: 'reset' }
-  | { type: 'answer'; answer: string }
+  | { type: 'answer'; answer: string; run_id?: string }
   | { type: 'usage'; usage: Usage }
   | { type: 'error'; message: string }
 

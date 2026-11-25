@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "ok": false,
+  "command": "finalize",
+  "status": "fail",
+  "type": "architecture",
+  "quality": "showcase",
+  "startedAt": "2026-11-24T00:12:56.020Z",
+  "specification": {
+    "path": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/candidate.json",
+    "sha256": "7aff84f15f84af2514d3af225d9812ba9de380f704175422286b404c12a86c79",
+    "bytes": 11047
+  },
+  "artifact": {
+    "path": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/personal-agent-architecture.html",
+    "sha256": "d88bafe47b62520021b0d0e3b68aa14cf1951839407f5f53d8650b99c8d10d43",
+    "bytes": 961603
+  },
+  "stages": {
+    "validate": {
+      "status": "fail",
+      "exitCode": 1,
+      "durationMs": null,
+      "command": [
+        "/Users/andriykostenko/.hermes/node/bin/node",
+        "/Users/andriykostenko/.claude/skills/archify/bin/archify.mjs",
+        "deliver",
+        "architecture",
+        "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/candidate.json",
+        "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/personal-agent-architecture.html",
+        "--quality",
+        "showcase",
+        "--repo-root",
+        "/Users/andriykostenko/Documents/Projects/personal_agent",
+        "--json"
+      ],
+      "receipt": {
+        "schemaVersion": 1,
+        "ok": false,
+        "command": "deliver",
+        "receiptId": "575bb3a9-659e-4f96-bdb0-f5cdf4d6dc34",
+        "stage": "render",
+        "type": "architecture",
+        "input": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/candidate.json",
+        "output": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/personal-agent-architecture.html",
+        "error": "Architecture layout validation failed:\n- Label \"POST /chat/stream\" overlaps component \"spa\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [297, 172, 92, 14]\n  component \"spa\" rect: [248, 132, 191, 60]\n  Suggested fix: set labelAt [343, 206] or set labelDy 24 (below); or set labelAt [343, 124] or set labelDy -58 (above)\n- Label \"astream_steps\" overlaps component \"api\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [299, 256, 72, 14]\n  component \"api\" rect: [269, 216, 149, 60]\n  Suggested fix: set labelAt [335, 290] or set labelDy 24 (below); or set labelAt [335, 208] or set labelDy -58 (above)",
+        "diagnostics": [
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Label \"POST /chat/stream\" overlaps component \"spa\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [297, 172, 92, 14]\n  component \"spa\" rect: [248, 132, 191, 60]\n  Suggested fix: set labelAt [343, 206] or set labelDy 24 (below); or set labelAt [343, 124] or set labelDy -58 (above)",
+            "subject": {
+              "diagramType": "architecture"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          },
+          {
+            "code": "layout/constraint",
+            "severity": "error",
+            "message": "Label \"astream_steps\" overlaps component \"api\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [299, 256, 72, 14]\n  component \"api\" rect: [269, 216, 149, 60]\n  Suggested fix: set labelAt [335, 290] or set labelDy 24 (below); or set labelAt [335, 208] or set labelDy -58 (above)",
+            "subject": {
+              "diagramType": "architecture"
+            },
+            "evidence": {},
+            "supportedFixes": []
+          }
+        ],
+        "provenance": "failed",
+        "update": {
+          "status": "unavailable",
+          "installedVersion": null,
+          "availableVersion": null,
+          "releaseNotes": null,
+          "checkedAt": null,
+          "source": null,
+          "noticeRequired": false,
+          "noticeText": null,
+          "reason": "disabled"
+        }
+      },
+      "execution": "embedded-in-deliver"
+    },
+    "deliver": {
+      "status": "not-run",
+      "execution": "blocked-by-validate"
+    }
+  },
+  "browserCheck": {
+    "requested": true,
+    "ran": false
+  },
+  "diagnostics": [
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"POST /chat/stream\" overlaps component \"spa\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [297, 172, 92, 14]\n  component \"spa\" rect: [248, 132, 191, 60]\n  Suggested fix: set labelAt [343, 206] or set labelDy 24 (below); or set labelAt [343, 124] or set labelDy -58 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    },
+    {
+      "code": "layout/constraint",
+      "severity": "error",
+      "message": "Label \"astream_steps\" overlaps component \"api\" — adjust labelDx/labelDy/labelSegment or set labelAt.\n  label rect: [299, 256, 72, 14]\n  component \"api\" rect: [269, 216, 149, 60]\n  Suggested fix: set labelAt [335, 290] or set labelDy 24 (below); or set labelAt [335, 208] or set labelDy -58 (above)",
+      "subject": {
+        "diagramType": "architecture"
+      },
+      "evidence": {},
+      "supportedFixes": []
+    }
+  ],
+  "evidence": {
+    "receipt": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/review-2/personal-agent-architecture.finalize.json",
+    "summaryReceipt": "/Users/andriykostenko/Documents/Projects/personal_agent/.archify/architecture-personal-agent-20261123-181000/review-2/personal-agent-architecture.finalize-summary.json"
+  },
+  "visualReview": "not-requested",
+  "failedStage": "validate",
+  "finishedAt": "2026-11-24T00:12:56.479Z",
+  "durationMs": 458,
+  "update": {
+    "status": "current",
+    "installedVersion": "3.3.0",
+    "availableVersion": "3.3.0",
+    "releaseNotes": null,
+    "checkedAt": "2026-11-24T00:10:40.372Z",
+    "source": "cache",
+    "noticeRequired": false,
+    "noticeText": null
+  }
+}

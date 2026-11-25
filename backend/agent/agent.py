@@ -1,15 +1,19 @@
+import logging
 import re
 from typing import Annotated, Literal
+from uuid import UUID, uuid7
+
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
-from agent.guardrails import GuardRails
 from langchain_core.messages import AIMessage, AnyMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import ToolNode
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import Durability
 
 from agent.guardrails import GuardRails
 from services.calendar_service import CalendarService
@@ -19,30 +23,45 @@ from core.settings import Settings
 from core.tracing import tracer_callbacks
 from agent.tools import build_tools
 
+# the request_id of every line comes from core/log_config.py (set once by the route)
+log = logging.getLogger(__name__)
+
+# When the checkpointer saves: "exit" = once per run (after the final node), not after every
+# step. A question is ~7 steps, and every save stores a FULL copy of the messages: measured on
+# 10 questions with 3 searches each, the memory of one chat is 2.5 MB instead of 9.6 MB.
+# The price: a run that crashes in the middle is not saved, so that question is simply not in
+# the history (fine for a chat; an interrupt() still saves, the run exits there).
+DURABILITY: Durability = "exit"
+
 # ─────────────────────────────  GRAPH  ─────────────────────────────
 #
-#                  ┌──────────┐
-#     START ─────▶ │ classify │  (LLM, structured output: in_scope / out_of_scope)
+#                  ┌──────────┐  1) regex injection filter (no LLM call)
+#     START ─────▶ │ classify │  2) LLM, structured output: in_scope / out_of_scope
 #                  └────┬─────┘
-#          in_scope     │      out_of_scope
+#          in_scope     │      out_of_scope (or injection)
 #        ┌──────────────┴──────────────┐
 #        ▼                             ▼
 #   ┌─────────┐                   ┌─────────┐
-#   │  agent  │                   │ refuse  │  (fixed message, no LLM, no tools)
-#   │  (LLM)  │                   └────┬────┘
-#   └─┬─────┬─┘                        ▼
-#     │     │ no tool_calls           END
-#     │     ▼
-#     │    END
-#     │ tool_calls
+#   │  agent  │ ◀──────┐          │ refuse  │  (fixed message, no LLM, no tools)
+#   │  (LLM)  │        │          └────┬────┘
+#   └─┬─────┬─┘        │               ▼
+#     │     │          │              END
+#     │     │ tool_calls
+#     │     ▼          │
+#     │  ┌─────────┐   │ results back to `agent` (the loop)
+#     │  │  tools  │ ──┘ (search_about_me / find_photos / check_availability / book_call;
+#     │  └─────────┘      notes come wrapped in <notes>, book_call checks the visitor's "yes")
+#     │
+#     │ no tool_calls (the final answer)
 #     ▼
-#   ┌─────────┐
-#   │  tools  │  (search_about_me / find_photos)
-#   └────┬────┘
-#        │ results back to `agent` (the loop)
-#        └──────────▶ agent
+#   ┌──────────────┐
+#   │ guard_output │  (no LLM: prompt leak -> fixed reply, invented URLs -> removed;
+#   └──────┬───────┘   replaces the answer by the same message id, or changes nothing)
+#          ▼
+#         END
 #
 # `tools` is reachable ONLY from `agent`, so out_of_scope never calls a tool.
+# Every final answer of `agent` passes `guard_output`; `refuse` is a fixed text and skips it.
 # ────────────────────────────────────────────────────────────────────
 
 
@@ -53,6 +72,10 @@ class State(TypedDict):
         list[AnyMessage], add_messages
     ]  # reducer: new messages are appended and wriitten by 'classify', read by router
     intent: Literal["in_scope", "out_of_scope"]
+    # what the guardrails caught in THIS turn: ["injection_regex"], ["invented_url: ..."],
+    # ["prompt_leak"]. Rewritten by classify and guard_output on every turn (the checkpointer
+    # keeps the state between turns, so a skipped write would show the previous turn's flags)
+    guard_flags: list[str]
 
 
 class Intent(BaseModel):
@@ -64,6 +87,18 @@ class Intent(BaseModel):
     )
 
 
+class ClassifyUpdate(TypedDict):
+    """What `classify` writes: ALWAYS both fields (the router reads intent of THIS turn)."""
+
+    intent: Literal["in_scope", "out_of_scope"]
+    guard_flags: list[str]
+
+
+class GuardUpdate(TypedDict, total=False):
+    """What `guard_output` writes: always guard_flags; messages only when the answer was replaced."""
+
+    guard_flags: list[str]
+    messages: list[AnyMessage]
 
 
 class Agent:
@@ -155,6 +190,12 @@ class Agent:
         "Choose out_of_scope ONLY for clearly unrelated requests (weather, news, "
         "general chit-chat, writing code for the user, etc.). When in doubt, choose in_scope."
     )
+    TOOL_LABELS = {
+        "search_about_me": "Searching the notes",
+        "find_photos": "Looking for photos",
+        "check_availability": "Checking Andriy's calendar",
+        "book_call": "Booking the call",
+    }
 
     def __init__(
         self,
@@ -162,6 +203,7 @@ class Agent:
         vector_service: VectorStoreService,
         calendar_service: CalendarService | None = None,
         usage_service: UsageService | None = None,
+        checkpointer: BaseCheckpointSaver | None = None,
     ):
         self.settings = settings
         self.calendar_service = calendar_service
@@ -180,18 +222,30 @@ class Agent:
         self.llm_with_tools = llm.bind_tools(self.tools)
         self.booking_enabled = any(t.name == "book_call" for t in self.tools)
         self.classifier = llm.with_structured_output(Intent)
-        self.graph = self._build_graph()
+        # in memory until the API attaches the persistent one (main.py: lifespan); the eval and
+        # scripts keep the in-memory one, so their threads never reach the production database
+        self.graph = self._build_graph(checkpointer or InMemorySaver())
+
+    def use_checkpointer(self, checkpointer: BaseCheckpointSaver) -> None:
+        """Rebuild the graph with another checkpointer. AsyncSqliteSaver can only be created
+        inside a running event loop, so the API calls this at start-up, before any request."""
+        self.graph = self._build_graph(checkpointer)
 
     # ---- nodes: state -> partial state update ----
 
-    async def classify(self, state: State) -> dict:
-        """LLM structured output: in_scope / out_of_scope"""
-        # A short history of the plain dialogue only. Slicing [-6:] of the raw list could start
-        # with a ToolMessage whose tool call was cut off, and the API rejects such a list (400).
+    async def classify(self, state: State) -> ClassifyUpdate:
+        """1) regex injection filter (no LLM call), 2) LLM structured output: in_scope / out_of_scope.
+        ALWAYS writes both fields: the checkpointer keeps them between turns, so a skipped write
+        would route this turn by the previous turn's intent."""
         last = state["messages"][-1].content
         if isinstance(last, str) and self.guardrails.is_injection(last):
-            # TODO: add logging everywhere
-            return State(intent="out_of_scope")
+            # no request_id argument: core/log_config.py adds it to every line of this request
+            log.warning("input guard: injection_regex")
+            return ClassifyUpdate(
+                intent="out_of_scope", guard_flags=["injection_regex"]
+            )
+        # A short history of the plain dialogue only. Slicing [-6:] of the raw list could start
+        # with a ToolMessage whose tool call was cut off, and the API rejects such a list (400).
         recent = [
             m
             for m in state["messages"]
@@ -200,7 +254,7 @@ class Agent:
         result: Intent = await self.classifier.ainvoke(
             [SystemMessage(content=self.CLASSIFIER_PROMPT), *recent]
         )
-        return {"intent": result.intent}
+        return ClassifyUpdate(intent=result.intent, guard_flags=[])
 
     def _system_prompt(self) -> str:
         """The booking rules (with the current date) are added only when booking is enabled"""
@@ -230,9 +284,25 @@ class Agent:
     def route_by_intent(state: State) -> Literal["agent", "refuse"]:
         return "agent" if state["intent"] == "in_scope" else "refuse"
 
+    @staticmethod
+    def route_after_agent(state: State) -> Literal["tools", "guard_output"]:
+        """Where the agent's reply goes next.
+
+        tool_calls in the last message -> `tools` (the model wants to search / book; the loop).
+        No tool_calls -> it is the final answer -> `guard_output`, never straight to END,
+        so every answer is checked. Replaces the prebuilt `tools_condition`, which can only
+        return "tools" or END. The Literal return type also tells LangGraph the possible targets
+        (used for drawing the graph and for checking the edges at compile time)."""
+        # getattr: only AIMessage has tool_calls (the type checker sees the whole AnyMessage union)
+        return (
+            "tools"
+            if getattr(state["messages"][-1], "tool_calls", None)
+            else "guard_output"
+        )
+
     # ----- assembly ---------
 
-    def _build_graph(self):
+    def _build_graph(self, checkpointer: BaseCheckpointSaver):
         graph = StateGraph(State)
         graph.add_node("classify", self.classify)
         graph.add_node("agent", self.call_model)
@@ -240,30 +310,43 @@ class Agent:
             "tools", ToolNode(self.tools)
         )  # executes the tool_calls of the last AI message
         graph.add_node("refuse", self.refuse)
+        graph.add_node("guard_output", self.guard_output)
 
         graph.add_edge(START, "classify")  # start of the graph chaining
         graph.add_conditional_edges(
             "classify", self.route_by_intent
         )  # -> agent | refuse
         graph.add_conditional_edges(
-            "agent", tools_condition
-        )  # -> tools | END (watching the tool_calls in the last message)
+            "agent", self.route_after_agent
+        )  # -> tools | guard_output (watching the tool_calls in the last message)
         graph.add_edge("tools", "agent")  # the loop
+        graph.add_edge("guard_output", END)  # the checked answer ends the run
         graph.add_edge("refuse", END)
 
-        return graph.compile(
-            checkpointer=InMemorySaver()
-        )  # memory for the dialog by thread id
+        # the memory of a dialog, by thread id (services/chat_memory.py: where and how long)
+        return graph.compile(checkpointer=checkpointer)
 
     # ----- public API -------
 
     def _run_args(
-        self, message: str, thread_id: str, client_id: str, ip: str, source: str = "web"
+        self,
+        message: str,
+        thread_id: str,
+        client_id: str,
+        ip: str,
+        source: str = "web",
+        run_id: UUID | None = None,
     ) -> tuple[dict, dict]:
         # client_id / ip are read by tools (booking limits); they are set by the server only
+        # run_id: given by the route (the same id is in its logs and in the feedback table);
+        # the eval and other callers get a fresh one
+        run_id = run_id or uuid7()
         return (
             {"messages": [{"role": "user", "content": message}]},
             {
+                # on the ROOT run this becomes the LangSmith trace id: logs, feedback and the
+                # trace share one id (core/log_config.py puts it into every log line)
+                "run_id": run_id,
                 "configurable": {
                     "thread_id": thread_id,
                     "client_id": client_id,
@@ -278,19 +361,43 @@ class Agent:
             },
         )
 
-    async def ainvoke(
-        self, message: str, thread_id: str, client_id: str, ip: str
-    ) -> str:
-        state_in, config = self._run_args(message, thread_id, client_id, ip)
-        result = await self.graph.ainvoke(state_in, config=config)
-        return result["messages"][-1].content
+    async def guard_output(self, state: State) -> GuardUpdate:
+        """No LLM: a leaked system prompt -> a fixed reply, invented URLs -> removed.
+        URLs may come only from tool results (photos, Meet link) or from the visitor's messages."""
+        reply = state["messages"][-1]
+        if not isinstance(reply.content, str):
+            # content blocks (not plain text): nothing to check with these regexes
+            return {"guard_flags": []}
+        allowed = "\n".join(
+            m.content
+            for m in state["messages"]
+            if m.type in ("tool", "human") and isinstance(m.content, str)
+        )
+        safe, problems = self.guardrails.check_answer(reply.content, allowed)
+        if not problems:
+            # no "messages": the answer stays as it is (and keeps its usage_metadata for the eval)
+            return {"guard_flags": []}
+        # the flags only, never the answer text: the URL itself may be what the model invented
+        log.warning("output guard: %s", ", ".join(p.split(":")[0] for p in problems))
+        # the same id -> the add_messages reducer REPLACES the answer instead of appending a second one
+        return {
+            "messages": [AIMessage(content=safe, id=reply.id)],
+            "guard_flags": problems,
+        }
 
-    TOOL_LABELS = {
-        "search_about_me": "Searching the notes",
-        "find_photos": "Looking for photos",
-        "check_availability": "Checking Andriy's calendar",
-        "book_call": "Booking the call",
-    }
+    async def ainvoke(
+        self,
+        message: str,
+        thread_id: str,
+        client_id: str,
+        ip: str,
+        run_id: UUID | None = None,
+    ) -> str:
+        state_in, config = self._run_args(
+            message, thread_id, client_id, ip, run_id=run_id
+        )
+        result = await self.graph.ainvoke(state_in, config=config, durability=DURABILITY)
+        return result["messages"][-1].content
 
     @staticmethod
     def _call_detail(args: dict) -> str:
@@ -332,25 +439,42 @@ class Agent:
         return f"Found {notes} note{'s' if notes != 1 else ''}{about}"
 
     async def astream_steps(
-        self, message: str, thread_id: str, client_id: str, ip: str
+        self,
+        message: str,
+        thread_id: str,
+        client_id: str,
+        ip: str,
+        run_id: UUID | None = None,
     ):
         """Runs the graph and yields UI events:
         {"type": "step", "text": ...}   the agent is doing something
         {"type": "token", "text": ...}  a piece of the final answer as it is generated
         {"type": "reset"}               discard the tokens sent so far
-        {"type": "answer", "answer": ...} the complete final answer."""
-        state_in, config = self._run_args(message, thread_id, client_id, ip)
+        {"type": "answer", "answer": ..., "run_id": ...}
+                                        the complete final answer, AFTER guard_output checked it
+                                        (the client replaces the streamed tokens with it);
+                                        run_id is what the client sends back with 👍/👎."""
+        state_in, config = self._run_args(
+            message, thread_id, client_id, ip, run_id=run_id
+        )
+        answer_run_id = str(config["run_id"])
         yield {"type": "step", "text": "Understanding your question"}
 
         # stream_mode="updates": one dict {node_name: node_output} per finished node
         streamed = False  # True once answer tokens were sent to the client
         queries: dict[str, str] = {}  # tool_call_id -> query, to label each tool result
+        final = (
+            ""  # the agent's last answer; sent only after guard_output has checked it
+        )
 
         # two modes at once -> tuples (mode, payload):
         #   "messages": (token chunk, metadata) as the LLM generates text
         #   "updates":  {node_name: node_output} when a node has finished
         async for mode, payload in self.graph.astream(
-            state_in, config=config, stream_mode=["updates", "messages"]
+            state_in,
+            config=config,
+            stream_mode=["updates", "messages"],
+            durability=DURABILITY,
         ):
             if mode == "messages":
                 chunk, meta = payload
@@ -365,8 +489,10 @@ class Agent:
                 continue
 
             for node, output in payload.items():
+                if output is None:
+                    output = {}  # a node that returned {}: guard_output with a clean answer
                 if not isinstance(output, dict):
-                    continue
+                    continue  # e.g. "__interrupt__" (a tuple), not a node update
 
                 if node == "classify" and output.get("intent") == "in_scope":
                     yield {"type": "step", "text": "Planning what to look up"}
@@ -386,7 +512,16 @@ class Agent:
                             detail = self._call_detail(call["args"])
                             yield {"type": "step", "text": f"{label}{detail}"}
                     else:
-                        yield {"type": "answer", "answer": reply.content}
+                        # not sent yet: the answer always goes through guard_output first
+                        final = reply.content
+
+                elif node == "guard_output":
+                    fixed = output.get("messages")
+                    if (
+                        fixed
+                    ):  # the guard replaced the answer (prompt leak / invented URL)
+                        final = fixed[-1].content
+                    yield {"type": "answer", "answer": final, "run_id": answer_run_id}
 
                 elif node == "tools":
                     for result in output["messages"]:
@@ -399,4 +534,9 @@ class Agent:
                     yield {"type": "step", "text": "Writing the answer"}
 
                 elif node == "refuse":
-                    yield {"type": "answer", "answer": output["messages"][-1].content}
+                    # a refusal gets a run_id too: 👎 on a wrongly refused question is a useful signal
+                    yield {
+                        "type": "answer",
+                        "answer": output["messages"][-1].content,
+                        "run_id": answer_run_id,
+                    }

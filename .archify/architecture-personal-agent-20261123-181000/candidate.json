@@ -1,0 +1,206 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "AI Obsidian Mentor — System Architecture",
+    "locale": "en",
+    "output": ".archify/architecture-personal-agent-20261123-181000/personal-agent-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@github.com:AndriyKostenko/Personal_agent.git",
+      "provider": "github",
+      "link_mode": "local-only",
+      "revision": "1bea5ada1dc15e68240d6ae36732818fac269392"
+    }
+  },
+  "layout": { "mode": "auto" },
+  "components": [
+    {
+      "id": "visitor",
+      "type": "external",
+      "label": "Visitor",
+      "sublabel": "web browser"
+    },
+    {
+      "id": "spa",
+      "type": "frontend",
+      "label": "React chat UI",
+      "sublabel": "Vite SPA, ids in localStorage",
+      "explanation": "useChat sends each question with the visitor id (X-Client-Id) and the conversation id (thread_id), both kept in localStorage, and reads the Server-Sent Events stream of steps, tokens and the final answer.",
+      "sources": [
+        { "path": "frontend/src/hooks/useChat.ts", "line": 84, "end_line": 89, "label": "POST /chat/stream" },
+        { "path": "frontend/src/config.ts", "line": 3, "end_line": 8, "label": "API base URL" }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "FastAPI routes",
+      "sublabel": "/api/v1, SSE stream",
+      "explanation": "chat_stream reserves a question in the usage limits before the agent runs (a refusal is an HTTP 429), streams the agent's events as SSE, and refunds the question when the agent fails. The same app mounts /media for the photos.",
+      "sources": [
+        { "path": "backend/routes/routes.py", "line": 119, "end_line": 166, "label": "chat_stream" },
+        { "path": "backend/routes/routes.py", "line": 198, "end_line": 215, "label": "index_document" },
+        { "path": "backend/main.py", "line": 20, "end_line": 40, "label": "app, CORS, /media" }
+      ]
+    },
+    {
+      "id": "usage",
+      "type": "database",
+      "label": "Usage limits",
+      "sublabel": "SQLite data/usage.db",
+      "explanation": "Counts questions and chats per visitor, questions per IP and bookings, each check-and-count in one BEGIN IMMEDIATE transaction.",
+      "sources": [
+        { "path": "backend/services/usage_service.py", "line": 27, "end_line": 75, "label": "UsageService tables" },
+        { "path": "backend/services/usage_service.py", "line": 112, "end_line": 157, "label": "reserve" }
+      ]
+    },
+    {
+      "id": "agent",
+      "type": "backend",
+      "label": "LangGraph agent",
+      "sublabel": "classify, agent ⇄ tools",
+      "tag": "in-memory thread memory",
+      "explanation": "START → classify (in_scope / out_of_scope). Out of scope goes to refuse (fixed message, no tools). In scope goes to the agent LLM, which loops through the tools node until it answers. Dialog memory is an InMemorySaver keyed by visitor + thread id.",
+      "sources": [
+        { "path": "backend/agent/agent.py", "line": 148, "end_line": 162, "label": "LLM, tools, classifier" },
+        { "path": "backend/agent/agent.py", "line": 210, "end_line": 231, "label": "graph + checkpointer" }
+      ]
+    },
+    {
+      "id": "openrouter",
+      "type": "cloud",
+      "label": "OpenRouter API",
+      "sublabel": "gpt-4o-mini, embeddings, vision"
+    },
+    {
+      "id": "vector",
+      "type": "backend",
+      "label": "Vector store service",
+      "sublabel": "search, replace_source",
+      "sources": [
+        { "path": "backend/services/vector_service.py", "line": 18, "end_line": 36, "label": "Qdrant + embeddings" },
+        { "path": "backend/services/vector_service.py", "line": 77, "end_line": 96, "label": "search" }
+      ]
+    },
+    {
+      "id": "qdrant",
+      "type": "database",
+      "label": "Qdrant (embedded)",
+      "sublabel": "local files, QDRANT_STORAGE_PATH",
+      "sources": [
+        { "path": "backend/services/vector_service.py", "line": 23, "end_line": 23, "label": "QdrantClient(path=...)" },
+        { "path": "backend/core/settings.py", "line": 17, "end_line": 18, "label": "storage path, collection" }
+      ]
+    },
+    {
+      "id": "calendar",
+      "type": "backend",
+      "label": "Calendar service",
+      "sublabel": "free slots, create booking",
+      "tag": "only if GOOGLE_* set",
+      "sources": [
+        { "path": "backend/services/calendar_service.py", "line": 82, "end_line": 99, "label": "freeBusy" },
+        { "path": "backend/services/calendar_service.py", "line": 153, "end_line": 195, "label": "create_booking" },
+        { "path": "backend/agent/tools.py", "line": 105, "end_line": 135, "label": "book_call tool" }
+      ]
+    },
+    {
+      "id": "gcal",
+      "type": "external",
+      "label": "Google Calendar API",
+      "sublabel": "OAuth refresh token",
+      "sources": [
+        { "path": "backend/services/calendar_service.py", "line": 15, "end_line": 16, "label": "token + API URLs" }
+      ]
+    },
+    {
+      "id": "media",
+      "type": "database",
+      "label": "Media folder",
+      "sublabel": "published photos",
+      "sources": [
+        { "path": "backend/main.py", "line": 38, "end_line": 40, "label": "StaticFiles /media" },
+        { "path": "backend/pipeline/sync_notes.py", "line": 135, "end_line": 139, "label": "_publish_image" }
+      ]
+    },
+    {
+      "id": "vault",
+      "type": "external",
+      "label": "Obsidian vault",
+      "sublabel": "Markdown notes, photos",
+      "sources": [
+        { "path": "backend/core/settings.py", "line": 14, "end_line": 14, "label": "vault path" }
+      ]
+    },
+    {
+      "id": "sync",
+      "type": "backend",
+      "label": "Sync pipeline",
+      "sublabel": "sync_notes.py, chunk + caption",
+      "explanation": "Walks the vault for *.md, skips files whose hash matches sync_state.json, chunks the text, captions linked and folder photos with the vision model, copies the photos into the media folder and posts everything to the indexing endpoints. Notes deleted from the vault are removed with an empty chunk list.",
+      "sources": [
+        { "path": "backend/pipeline/sync_notes.py", "line": 72, "end_line": 133, "label": "process_file" },
+        { "path": "backend/pipeline/sync_notes.py", "line": 228, "end_line": 270, "label": "run" },
+        { "path": "backend/pipeline/image_captioner.py", "line": 33, "end_line": 65, "label": "PhotoCaptioner" }
+      ]
+    }
+  ],
+  "connections": [
+    { "id": "visitor-spa", "from": "visitor", "to": "spa", "label": "asks", "variant": "emphasis" },
+    { "id": "spa-api", "from": "spa", "to": "api", "label": "POST /chat/stream", "variant": "emphasis" },
+    { "id": "api-usage", "from": "api", "to": "usage", "label": "reserve / refund" },
+    { "id": "api-agent", "from": "api", "to": "agent", "label": "astream_steps", "variant": "emphasis" },
+    { "id": "agent-openrouter", "from": "agent", "to": "openrouter", "label": "classify + chat" },
+    { "id": "agent-vector", "from": "agent", "to": "vector", "label": "search tools" },
+    { "id": "vector-openrouter", "from": "vector", "to": "openrouter", "label": "embed" },
+    { "id": "vector-qdrant", "from": "vector", "to": "qdrant", "label": "query / upsert" },
+    { "id": "agent-calendar", "from": "agent", "to": "calendar", "label": "booking tools", "variant": "dashed" },
+    { "id": "agent-usage", "from": "agent", "to": "usage", "label": "booking limit" },
+    { "id": "calendar-gcal", "from": "calendar", "to": "gcal", "label": "freeBusy / events" },
+    { "id": "api-media", "from": "api", "to": "media", "label": "serves /media" },
+    { "id": "vault-sync", "from": "vault", "to": "sync", "label": "reads" },
+    { "id": "sync-openrouter", "from": "sync", "to": "openrouter", "label": "caption photos" },
+    { "id": "sync-media", "from": "sync", "to": "media", "label": "copies photos" },
+    { "id": "sync-api", "from": "sync", "to": "api", "label": "POST index endpoints", "variant": "security" },
+    { "id": "api-vector", "from": "api", "to": "vector", "label": "index chunks" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Answer path",
+      "items": [
+        "classify sends out-of-scope questions to a fixed refusal, with no tools",
+        "agent ⇄ tools loop: search_about_me, find_photos (k=8)",
+        "steps, tokens and the answer stream back as SSE events",
+        "dialog memory is in-process (InMemorySaver), lost on restart"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Limits",
+      "items": [
+        "10 questions and 1 chat per visitor, 15 questions per IP",
+        "reserved before the LLM runs, refunded when the agent fails",
+        "booking limits are checked by book_call, with the visitor taken from the run config"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Ingestion",
+      "items": [
+        "run by hand or the Docker sync job, not by the API",
+        "unchanged notes are skipped by MD5 in sync_state.json",
+        "indexing endpoints require X-Admin-Key when ADMIN_API_KEY is set"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Not drawn",
+      "items": [
+        "legacy /ask_mentor, /index and /search endpoints",
+        "Docker deployment: caddy (HTTPS) → nginx → FastAPI"
+      ]
+    }
+  ]
+}

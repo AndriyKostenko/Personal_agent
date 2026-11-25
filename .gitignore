@@ -6,6 +6,9 @@ backend/__pycache__
 backend/**/__pycache__/
 frontend/.venv
 frontend/.env
+backend/evals/results/agent_*.json
+backend/evals/qdrant_db/
+backend/.archify/
 
 # Logs
 logs

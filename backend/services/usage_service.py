@@ -60,6 +60,15 @@ class UsageService:
                     created_at REAL,
                     PRIMARY KEY (client_id, thread_id))"""
             )
+            # added later: an existing database gets the columns here (CREATE TABLE IF NOT EXISTS
+            # does not change a table that is already there)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(chats)")}
+            if "last_active_at" not in columns:
+                # the last question in this chat: the memory TTL counts from it
+                conn.execute("ALTER TABLE chats ADD COLUMN last_active_at REAL")
+            if "memory_deleted_at" not in columns:
+                # when services/chat_memory.py deleted the agent's memory of this chat (NULL = kept)
+                conn.execute("ALTER TABLE chats ADD COLUMN memory_deleted_at REAL")
             conn.execute(
                 """CREATE TABLE IF NOT EXISTS bookings (
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +81,16 @@ class UsageService:
                     ip         TEXT PRIMARY KEY,
                     questions  INTEGER NOT NULL DEFAULT 0,
                     updated_at REAL)"""
+            )
+            # one row per answered run: who may rate it, and the rating (NULL = not rated yet).
+            # Kept here even without LangSmith: the ratings survive a disabled tracer.
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS runs (
+                    run_id     TEXT PRIMARY KEY,
+                    client_id  TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    feedback   INTEGER,
+                    rated_at   REAL)"""
             )
 
     # ---------- plumbing ----------
@@ -136,7 +155,15 @@ class UsageService:
                 known = conn.execute(
                     "SELECT 1 FROM chats WHERE client_id = ? AND thread_id = ?", (client_id, thread_id)
                 ).fetchone()
-                if not known:
+                if known:
+                    # activity: the memory TTL starts again; a chat whose memory was deleted is
+                    # remembered from now on again, so it can expire (and be deleted) once more
+                    conn.execute(
+                        """UPDATE chats SET last_active_at = ?, memory_deleted_at = NULL
+                           WHERE client_id = ? AND thread_id = ?""",
+                        (now, client_id, thread_id),
+                    )
+                else:
                     if usage["chats_used"] >= s.MAX_CHATS_PER_USER:
                         raise LimitExceeded(
                             "chat_limit",
@@ -145,8 +172,8 @@ class UsageService:
                             usage,
                         )
                     conn.execute(
-                        "INSERT INTO chats (client_id, thread_id, created_at) VALUES (?, ?, ?)",
-                        (client_id, thread_id, now),
+                        "INSERT INTO chats (client_id, thread_id, created_at, last_active_at) VALUES (?, ?, ?, ?)",
+                        (client_id, thread_id, now, now),
                     )
                     new_chat = True
 
@@ -198,6 +225,41 @@ class UsageService:
         with self._tx() as conn:
             conn.execute("DELETE FROM bookings WHERE id = ?", (booking_id,))
 
+    def _expired_chats(self, cutoff: float) -> list[tuple[str, str]]:
+        """(client_id, thread_id) of the chats with no question since `cutoff` whose memory is
+        still kept. Chats from before last_active_at existed fall back to created_at."""
+        with self._tx() as conn:
+            return conn.execute(
+                """SELECT client_id, thread_id FROM chats
+                   WHERE COALESCE(last_active_at, created_at, 0) < ? AND memory_deleted_at IS NULL""",
+                (cutoff,),
+            ).fetchall()
+
+    def _mark_memory_deleted(self, client_id: str, thread_id: str) -> None:
+        with self._tx() as conn:
+            conn.execute(
+                "UPDATE chats SET memory_deleted_at = ? WHERE client_id = ? AND thread_id = ?",
+                (time.time(), client_id, thread_id),
+            )
+
+    def _record_run(self, run_id: str, client_id: str) -> None:
+        with self._tx() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO runs (run_id, client_id, created_at) VALUES (?, ?, ?)",
+                (run_id, client_id, time.time()),
+            )
+
+    def _claim_feedback(self, run_id: str, client_id: str, score: int) -> bool:
+        """One atomic UPDATE checks both rules: the run belongs to THIS visitor and has no rating
+        yet. A check-then-write in two queries would let two parallel requests both pass."""
+        with self._tx() as conn:
+            cursor = conn.execute(
+                """UPDATE runs SET feedback = ?, rated_at = ?
+                   WHERE run_id = ? AND client_id = ? AND feedback IS NULL""",
+                (score, time.time(), run_id, client_id),
+            )
+            return cursor.rowcount == 1
+
     # ---------- async API ----------
 
     async def get_usage(self, client_id: str) -> dict:
@@ -213,6 +275,21 @@ class UsageService:
 
     async def release_booking(self, booking_id: int) -> None:
         await asyncio.to_thread(self._release_booking, booking_id)
+
+    async def expired_chats(self, cutoff: float) -> list[tuple[str, str]]:
+        """Chats idle since `cutoff` (a unix time) whose agent memory has not been deleted yet."""
+        return await asyncio.to_thread(self._expired_chats, cutoff)
+
+    async def mark_memory_deleted(self, client_id: str, thread_id: str) -> None:
+        await asyncio.to_thread(self._mark_memory_deleted, client_id, thread_id)
+
+    async def record_run(self, run_id: str, client_id: str) -> None:
+        """Remember who got this answer, so only they can rate it. Call when the answer is ready."""
+        await asyncio.to_thread(self._record_run, run_id, client_id)
+
+    async def claim_feedback(self, run_id: str, client_id: str, score: int) -> bool:
+        """Store the rating. False = not this visitor's run, unknown run, or already rated."""
+        return await asyncio.to_thread(self._claim_feedback, run_id, client_id, score)
 
     async def refund(self, client_id: str, ip: str, thread_id: str | None, new_chat: bool) -> dict:
         return await asyncio.to_thread(self._refund, client_id, ip, thread_id, new_chat)

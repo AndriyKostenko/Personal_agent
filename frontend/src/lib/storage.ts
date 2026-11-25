@@ -45,12 +45,23 @@ interface StoredMessage {
   raw?: string
   steps?: string[]
   incomplete?: boolean
+  runId?: string
+  feedback?: number
 }
 
 function fromStored(m: StoredMessage): Message | null {
   const id = m.id || newId()
   if (m.role === 'assistant') {
-    return { id, role: 'assistant', raw: String(m.raw ?? ''), steps: Array.isArray(m.steps) ? m.steps : [], incomplete: !!m.incomplete }
+    return {
+      id,
+      role: 'assistant',
+      raw: String(m.raw ?? ''),
+      steps: Array.isArray(m.steps) ? m.steps : [],
+      incomplete: !!m.incomplete,
+      // kept across reloads, so a rated answer stays rated (the server refuses a second vote anyway)
+      runId: typeof m.runId === 'string' ? m.runId : undefined,
+      feedback: m.feedback === 0 || m.feedback === 1 ? m.feedback : undefined,
+    }
   }
   if (m.role === 'user' || m.role === 'error') return { id, role: m.role, content: String(m.content ?? '') }
   return null
@@ -83,7 +94,15 @@ export function saveConversation(conversation: Conversation) {
       ? // a streaming answer is saved with the text that has arrived so far
         m.live && !m.live.done
         ? { id: m.id, role: m.role, raw: m.live.text, steps: m.steps, incomplete: true }
-        : { id: m.id, role: m.role, raw: m.raw, steps: m.steps, incomplete: m.incomplete }
+        : {
+            id: m.id,
+            role: m.role,
+            raw: m.raw,
+            steps: m.steps,
+            incomplete: m.incomplete,
+            runId: m.runId,
+            feedback: m.feedback,
+          }
       : { id: m.id, role: m.role, content: m.content },
   )
   try {

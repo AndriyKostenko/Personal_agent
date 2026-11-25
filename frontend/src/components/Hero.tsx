@@ -5,10 +5,13 @@ interface Props {
   prompts: Prompt[]
   disabled: boolean
   onPick: (prompt: Prompt) => void
+  /** the number of messages in the saved conversation (0 = none: no way back to show) */
+  chatLength?: number
+  onOpenChat?: () => void
 }
 
 /** the main screen: the animated binary portrait and the ready-made questions */
-export function Hero({ prompts, disabled, onPick }: Props) {
+export function Hero({ prompts, disabled, onPick, chatLength = 0, onOpenChat }: Props) {
   return (
     <section className="hero">
       <div className="portrait frame">
@@ -23,6 +26,11 @@ export function Hero({ prompts, disabled, onPick }: Props) {
       </h1>
       <p className="role">SOFTWARE ENGINEER</p>
       <p className="lead">I'm AgentAndriy, Andriy's personal agent.</p>
+      {chatLength > 0 && onOpenChat && (
+        <button type="button" className="resume" onClick={onOpenChat}>
+          ↩ BACK TO THE CHAT <span className="dim">({chatLength} {chatLength === 1 ? 'MESSAGE' : 'MESSAGES'})</span>
+        </button>
+      )}
       <div className={prompts.length > 3 ? 'cards cards--four' : 'cards'}>
         {prompts.map((item) => (
           <button key={item.label} className="card frame" disabled={disabled} onClick={() => onPick(item)}>

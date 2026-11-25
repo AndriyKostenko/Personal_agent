@@ -34,6 +34,7 @@ COPY --chown=app:app . .
 # These paths are read by core/settings.py. Mount a persistent volume on /data:
 #   /data/qdrant   embedded Qdrant (the vector database)
 #   /data/usage.db visitors' question / chat counters (SQLite)
+#   /data/checkpoints.db  the agent's chat memory (LangGraph checkpoints, SQLite)
 #   /data/media    photos served at /media
 #   /data/sync     state of the notes synchronisation job
 ENV PATH="/opt/venv/bin:$PATH" \
@@ -41,6 +42,7 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     QDRANT_STORAGE_PATH=/data/qdrant \
     USAGE_DB_PATH=/data/usage.db \
+    CHECKPOINT_DB_PATH=/data/checkpoints.db \
     MEDIA_DIR=/data/media
 
 USER app

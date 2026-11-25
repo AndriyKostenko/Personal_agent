@@ -1,20 +1,45 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
+from core.log_config import setup_logging
 from core.settings import settings
-from core.tracing import flush_traces
-from routes.routes import router
+
+# BEFORE importing the routes: that import builds the agent and the vector store (dependencies.py),
+# and whatever they log while starting must already go through our handlers and format
+setup_logging(settings.LOG_LEVEL, settings.log_file_path)
+
+from core.tracing import flush_traces  # noqa: E402
+from dependencies.dependencies import agent_instance, usage_instance  # noqa: E402
+from routes.routes import router  # noqa: E402
+from services.chat_memory import cleanup_loop  # noqa: E402
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    flush_traces()  # traces are uploaded by a background thread: send what is still queued
+    # The agent's chat memory on disk (survives restarts and deploys) instead of in RAM.
+    # AsyncSqliteSaver needs the running event loop, which exists only from here on.
+    Path(settings.CHECKPOINT_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    async with AsyncSqliteSaver.from_conn_string(settings.CHECKPOINT_DB_PATH) as saver:
+        await saver.setup()  # creates the tables once (WAL mode)
+        agent_instance.use_checkpointer(saver)
+        # a checkpointer never forgets on its own: delete chats idle for CHAT_MEMORY_TTL_DAYS
+        cleanup = asyncio.create_task(
+            cleanup_loop(saver, usage_instance, settings.CHAT_MEMORY_TTL_DAYS)
+        )
+        try:
+            yield
+        finally:
+            cleanup.cancel()
+            with suppress(asyncio.CancelledError):
+                await cleanup
+            flush_traces()  # traces are uploaded by a background thread: send what is still queued
 
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=lifespan)

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { CHAT_URL, DEFAULT_QUESTION_LIMIT, USAGE_URL } from '../config'
+import { CHAT_URL, DEFAULT_QUESTION_LIMIT, FEEDBACK_URL, USAGE_URL } from '../config'
 import { readEvents } from '../lib/sse'
 import { getClientId, loadConversation, newId, saveConversation } from '../lib/storage'
 import { StreamBuffer } from '../lib/streamBuffer'
-import type { AssistantMessage, Message, Usage } from '../types'
+import type { AssistantMessage, FeedbackScore, Message, Usage } from '../types'
 
 const FAILED_MESSAGE = 'Could not get a response. Please check your connection to the server.'
 
@@ -132,10 +132,16 @@ export function useChat() {
             case 'answer':
               if (buffer) {
                 buffer.finish(event.answer)
-                patch(answerId, { raw: event.answer })
+                patch(answerId, { raw: event.answer, runId: event.run_id })
               } else {
                 // no tokens were streamed (e.g. a refusal)
-                const msg: AssistantMessage = { id: newId(), role: 'assistant', raw: event.answer, steps: [...doneSteps] }
+                const msg: AssistantMessage = {
+                  id: newId(),
+                  role: 'assistant',
+                  raw: event.answer,
+                  steps: [...doneSteps],
+                  runId: event.run_id,
+                }
                 setMessages((list) => [...list, msg])
               }
               answered = true
@@ -177,6 +183,23 @@ export function useChat() {
   /** the Stop button: closing the connection makes the server cancel the LLM call */
   const stop = useCallback(() => abort.current?.abort(), [])
 
+  /**
+   * 👍/👎 on one answer. Optimistic: the vote shows at once and is not taken back if the request
+   * fails (a lost rating is not worth an error message). useCallback with no dependencies: it is
+   * passed to the memoised ChatMessage, and a new function on every render would re-render every
+   * message on every streamed token.
+   */
+  const sendFeedback = useCallback((messageId: string, runId: string, score: FeedbackScore) => {
+    setMessages((list) =>
+      list.map((m) => (m.id === messageId && m.role === 'assistant' ? { ...m, feedback: score } : m)),
+    )
+    fetch(FEEDBACK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId },
+      body: JSON.stringify({ run_id: runId, score }),
+    }).catch((error) => console.warn('feedback was not sent:', error))
+  }, [])
+
   return {
     threadId,
     messages,
@@ -189,5 +212,6 @@ export function useChat() {
     setServerNotice,
     send,
     stop,
+    sendFeedback,
   }
 }

@@ -49,6 +49,14 @@ export default function App() {
     scrollToTop()
   }
 
+  // back from the main screen to the saved conversation, at its latest message
+  // (scrollToBottom re-sticks; the ResizeObserver scrolls once the messages are rendered)
+  const openChat = () => {
+    if (messages.length === 0) return
+    setHome(false)
+    scrollToBottom()
+  }
+
   return (
     <div className="shell">
       <FallingQuestions questions={SIDE_QUESTIONS} disabled={cantAsk} onPick={ask} />
@@ -77,6 +85,11 @@ export default function App() {
           <span className="stat hide-sm">
             THREAD <b>{chat.threadId.slice(0, 6)}</b>
           </span>
+          {showHero && messages.length > 0 && (
+            <button type="button" className="stat stat-btn" title="Open the conversation" onClick={openChat}>
+              CHAT <b>↩</b>
+            </button>
+          )}
         </div>
       </header>
 
@@ -85,7 +98,13 @@ export default function App() {
           <main className="chat-box" ref={scrollRef}>
             <div className="column" ref={contentRef} role={showHero ? undefined : 'log'}>
               {showHero ? (
-                <Hero prompts={cardPrompts} disabled={outOfQuestions} onPick={(p) => ask(p.prompt)} />
+                <Hero
+                  prompts={cardPrompts}
+                  disabled={outOfQuestions}
+                  onPick={(p) => ask(p.prompt)}
+                  chatLength={messages.length}
+                  onOpenChat={openChat}
+                />
               ) : (
                 <>
                   {/* the same animated portrait, small, in the top left corner of the chat */}
@@ -93,7 +112,7 @@ export default function App() {
                     <BinaryPortrait src="/hero.jpg" cellW={3.2} cellH={5} />
                   </div>
                   {messages.map((msg) => (
-                    <ChatMessage key={msg.id} msg={msg} />
+                    <ChatMessage key={msg.id} msg={msg} onFeedback={chat.sendFeedback} />
                   ))}
                 </>
               )}

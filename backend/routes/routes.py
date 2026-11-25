@@ -1,8 +1,14 @@
+import asyncio
 import json
 import logging
+import time
+from uuid import uuid7
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
+
+from core.log_config import request_id_var
+from core.tracing import send_feedback
 
 from dependencies.dependencies import (
     agent_dependency,
@@ -22,10 +28,13 @@ from schemas.schemas import (
     QueryRequest,
     SearchResponse,
     IndexDocumentRequest,
+    FeedbackRequest,
 )
+from services.chat_memory import thread_key
 from services.usage_service import LimitExceeded
 
-logger = logging.getLogger("ai_mentor")
+# the module name ("routes.routes"), like every other module: one naming rule for the whole app
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -36,6 +45,8 @@ FAILED_MESSAGE = (
 
 
 def _limit_error(e: LimitExceeded) -> HTTPException:
+    # INFO, not WARNING: a limit is the system working as designed; the code shows which one
+    logger.info("limit reached: %s", e.code)
     return HTTPException(
         status_code=429,
         detail={"code": e.code, "message": e.message, "usage": e.usage},
@@ -127,6 +138,9 @@ async def chat_stream(
 
     The limits are checked BEFORE the stream starts, so a refused question gets a plain
     HTTP 429 and never reaches the LLM."""
+    # one id for the whole request: every log line, the LangSmith trace and the feedback row
+    run_id = uuid7()
+    request_id_var.set(str(run_id))
     thread_id = str(data.thread_id)
     try:
         reservation = await usage_service.reserve(
@@ -136,19 +150,27 @@ async def chat_stream(
         raise _limit_error(e)
 
     # the agent's memory is keyed by visitor + chat, so nobody can read another visitor's thread
-    thread_key = f"{client.client_id}:{thread_id}"
+    memory_key = thread_key(client.client_id, thread_id)
 
     async def events():
+        # the body is iterated by Starlette in a task created after this function returned;
+        # it copies the context, but setting it here too keeps the id independent of that detail
+        request_id_var.set(str(run_id))
+        started = time.perf_counter()
         yield _sse({"type": "usage", "usage": reservation.usage})
         answered = False
         try:
             async for event in agent.astream_steps(
-                data.message, thread_key, client.client_id, client.ip
+                data.message, memory_key, client.client_id, client.ip, run_id=run_id
             ):
-                answered = answered or event["type"] == "answer"
+                if event["type"] == "answer":
+                    # BEFORE the answer reaches the browser: a fast click on 👍 must find the row
+                    await usage_service.record_run(str(run_id), client.client_id)
+                    answered = True
                 yield _sse(event)
             if not answered:
                 raise RuntimeError("the agent finished without an answer")
+            logger.info("chat answered in %.1fs", time.perf_counter() - started)
         except Exception:
             # A failure that is not the visitor's fault gives the question back.
             # (A visitor who just closes the page is not refunded: the LLM has been paid for.)
@@ -173,6 +195,8 @@ async def chat(
     client: client_dependency,
     usage_service: usage_dependency,
 ):
+    run_id = uuid7()
+    request_id_var.set(str(run_id))
     thread_id = str(data.thread_id)
     try:
         reservation = await usage_service.reserve(
@@ -181,10 +205,17 @@ async def chat(
     except LimitExceeded as e:
         raise _limit_error(e)
     try:
+        started = time.perf_counter()
         answer = await agent.ainvoke(
-            data.message, f"{client.client_id}:{thread_id}", client.client_id, client.ip
+            data.message,
+            thread_key(client.client_id, thread_id),
+            client.client_id,
+            client.ip,
+            run_id=run_id,
         )
-        return ChatResponse(answer=answer, usage=reservation.usage)
+        await usage_service.record_run(str(run_id), client.client_id)
+        logger.info("chat answered in %.1fs", time.perf_counter() - started)
+        return ChatResponse(answer=answer, usage=reservation.usage, run_id=str(run_id))
     except Exception:
         logger.exception("chat failed")
         await usage_service.refund(
@@ -193,6 +224,30 @@ async def chat(
         raise HTTPException(
             status_code=500, detail={"code": "failed", "message": FAILED_MESSAGE}
         )
+
+
+@router.post("/feedback", status_code=204)
+async def feedback(
+    data: FeedbackRequest, client: client_dependency, usage_service: usage_dependency
+):
+    """👍/👎 on one answer: stored in the usage DB, then sent to the LangSmith trace."""
+    request_id_var.set(str(data.run_id))  # the log lines of the rating join the run's lines
+    if not await usage_service.claim_feedback(
+        str(data.run_id), client.client_id, data.score
+    ):
+        # one answer for "not your run", "unknown run" and "already rated": the endpoint
+        # does not tell anyone which run ids exist
+        raise HTTPException(
+            status_code=404, detail={"code": "not_found", "message": "Unknown answer."}
+        )
+    logger.info("feedback: score=%d", data.score)
+    try:
+        # create_feedback is a blocking HTTP call: off the event loop
+        await asyncio.to_thread(send_feedback, data.run_id, data.score, data.comment)
+    except Exception:
+        # the rating is saved locally; LangSmith being down is not the visitor's problem
+        logger.exception("feedback upload to LangSmith failed")
+    return Response(status_code=204)
 
 
 @router.post(
